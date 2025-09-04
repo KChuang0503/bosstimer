@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #efefbb 0%, #d4d3dd 100%);
     min-height: 100vh;
     display: flex;
     justify-content: center;
@@ -33,10 +33,7 @@ body {
 
 .timer-panel {
     flex: 0 0 400px;
-    background: rgba(255, 255, 255, 0.8);
     padding: 1.5rem;
-    border-radius: 15px;
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
 }
 
 .active-timers {
