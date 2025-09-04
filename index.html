@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boss 重生計時器</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Boss 重生計時器</h1>
+        
+        <div class="main-layout">
+            <!-- 左側：Boss 計時器控制面板 -->
+            <div class="timer-panel">
+                <div class="boss-selector">
+                    <div class="chapter-selector">
+                        <label for="chapter">選擇章節：</label>
+                        <select id="chapter">
+                            <option value="7">第七章</option>
+                            <option value="8">第八章</option>
+                            <option value="9">第九章</option>
+                            <option value="10">第十章</option>
+                        </select>
+                    </div>
+                    
+                    <div class="boss-selector">
+                        <label for="boss">選擇地圖：</label>
+                        <select id="boss">
+                            <option value="7-1">扎卡里耶爾交叉路</option>
+                            <option value="7-2">王陵一層</option>
+                            <option value="7-3">王陵二層</option>
+                            <option value="7-4">王陵三層</option>
+                        </select>
+                    </div>
+                    
+                    <div class="server-selector">
+                        <label for="server">選擇分流：</label>
+                        <select id="server">
+                            <option value="1">分流 1</option>
+                            <option value="2">分流 2</option>
+                            <option value="3">分流 3</option>
+                            <option value="4">分流 4</option>
+                            <option value="5">分流 5</option>
+                            <option value="6">分流 6</option>
+                            <option value="7">分流 7</option>
+                            <option value="8">分流 8</option>
+                            <option value="9">分流 9</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="timer-setup">
+                    <div class="input-group">
+                        <label for="hours">小時</label>
+                        <input type="number" id="hours" min="0" max="23" value="0" placeholder="0">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="minutes">分鐘</label>
+                        <input type="number" id="minutes" min="0" max="59" value="0" placeholder="0">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="seconds">秒數</label>
+                        <input type="number" id="seconds" min="0" max="59" value="0" placeholder="0">
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <button id="addTimerBtn" class="btn btn-add">新增計時器</button>
+                    <button id="resetBtn" class="btn btn-reset">重置</button>
+                </div>
+                
+                <div class="notification-controls">
+                    <div class="volume-control">
+                        <label for="volumeSlider">音量：</label>
+                        <input type="range" id="volumeSlider" min="0" max="100" value="50" class="volume-slider">
+                        <span id="volumeValue">50%</span>
+                    </div>
+                    <div class="mute-control">
+                        <button id="muteBtn" class="btn btn-mute">🔊</button>
+                    </div>
+                </div>
+                
+                <div class="status" id="status">選擇地圖並設定重生時間</div>
+            </div>
+            
+            <!-- 右側：進行中的計時器列表 -->
+            <div class="active-timers">
+                <h3>進行中的計時器</h3>
+                <div class="timers-list" id="timersList"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
