@@ -162,7 +162,6 @@ class BossTimer {
             return;
         }
         
-        const timerId = this.timerIdCounter++;
         const chapter = this.chapterSelect.value;
         const boss = this.bossSelect.value;
         const server = this.serverSelect.value;
@@ -175,6 +174,16 @@ class BossTimer {
         const mapName = this.bossSelect.options[this.bossSelect.selectedIndex].text;
         const bossInfo = `${chapterNames[chapter]} - ${mapName} (分流 ${server})`;
         
+        // 檢查是否已存在相同的計時器
+        const existingTimer = this.findExistingTimer(chapter, boss, server);
+        if (existingTimer) {
+            this.status.textContent = `已存在 ${bossInfo} 的計時器，無法重複新增`;
+            this.showDuplicateWarning(existingTimer);
+            return;
+        }
+        
+        const timerId = this.timerIdCounter++;
+        
         const timer = {
             id: timerId,
             bossInfo: bossInfo,
@@ -185,7 +194,11 @@ class BossTimer {
             intervalId: null,
             startTime: Date.now(),
             pausedTime: 0,
-            lastUpdateTime: Date.now()
+            lastUpdateTime: Date.now(),
+            // 添加識別資訊用於重複檢查
+            chapter: chapter,
+            boss: boss,
+            server: server
         };
         
         timer.intervalId = setInterval(() => {
@@ -203,6 +216,107 @@ class BossTimer {
             startTime: new Date(timer.startTime).toLocaleTimeString(),
             expectedEndTime: new Date(timer.startTime + totalSeconds * 1000).toLocaleTimeString()
         });
+    }
+    
+    // 檢查是否已存在相同的計時器
+    findExistingTimer(chapter, boss, server) {
+        for (const timer of this.activeTimers.values()) {
+            if (timer.chapter === chapter && timer.boss === boss && timer.server === server) {
+                return timer;
+            }
+        }
+        return null;
+    }
+    
+    // 顯示重複計時器警告
+    showDuplicateWarning(existingTimer) {
+        // 高亮顯示已存在的計時器
+        const timerElement = document.getElementById(`timer-${existingTimer.id}`);
+        if (timerElement) {
+            timerElement.classList.add('duplicate-warning');
+            
+            // 自動滾動到該計時器位置
+            this.scrollToTimer(timerElement);
+            
+            // 3秒後移除警告樣式
+            setTimeout(() => {
+                timerElement.classList.remove('duplicate-warning');
+            }, 3000);
+        }
+        
+        // 播放警告音效
+        this.playWarningSound();
+    }
+    
+    // 滾動到指定計時器位置
+    scrollToTimer(timerElement) {
+        const timersList = this.timersList;
+        
+        // 檢查元素是否存在
+        if (!timerElement || !timersList) {
+            return;
+        }
+        
+        // 使用 requestAnimationFrame 確保 DOM 更新完成後再滾動
+        requestAnimationFrame(() => {
+            const timerRect = timerElement.getBoundingClientRect();
+            const listRect = timersList.getBoundingClientRect();
+            
+            // 計算計時器相對於列表的位置
+            const timerTop = timerRect.top - listRect.top + timersList.scrollTop;
+            const timerBottom = timerTop + timerRect.height;
+            const listHeight = timersList.clientHeight;
+            const currentScrollTop = timersList.scrollTop;
+            
+            // 檢查計時器是否完全在可見區域內
+            const isFullyVisible = timerTop >= currentScrollTop && 
+                                 timerBottom <= currentScrollTop + listHeight;
+            
+            if (!isFullyVisible) {
+                // 如果計時器在可見區域上方，滾動到計時器頂部
+                if (timerTop < currentScrollTop) {
+                    timersList.scrollTo({
+                        top: Math.max(0, timerTop - 20), // 留一點邊距，確保不會滾動到負值
+                        behavior: 'smooth'
+                    });
+                }
+                // 如果計時器在可見區域下方，滾動到計時器底部
+                else if (timerBottom > currentScrollTop + listHeight) {
+                    const maxScrollTop = timersList.scrollHeight - listHeight;
+                    timersList.scrollTo({
+                        top: Math.min(maxScrollTop, timerBottom - listHeight + 20), // 留一點邊距
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    }
+    
+    // 播放警告音效
+    playWarningSound() {
+        if (this.isMuted) return;
+        
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // 播放兩聲較短的警告音
+            oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+            oscillator.frequency.setValueAtTime(300, audioContext.currentTime + 0.2);
+            
+            // 使用較低的音量
+            gainNode.gain.setValueAtTime(this.volume * 0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        } catch (error) {
+            console.log('音頻播放不可用');
+        }
     }
     
     tickTimer(timer) {
