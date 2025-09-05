@@ -184,7 +184,8 @@ class BossTimer {
             isPaused: false,
             intervalId: null,
             startTime: Date.now(),
-            pausedTime: 0
+            pausedTime: 0,
+            lastUpdateTime: Date.now()
         };
         
         timer.intervalId = setInterval(() => {
@@ -195,28 +196,40 @@ class BossTimer {
         this.updateTimersList();
         
         this.status.textContent = `已新增 ${bossInfo} 計時器`;
+        
+        // 調試信息
+        console.log(`計時器 ${timerId} 開始:`, {
+            totalSeconds: totalSeconds,
+            startTime: new Date(timer.startTime).toLocaleTimeString(),
+            expectedEndTime: new Date(timer.startTime + totalSeconds * 1000).toLocaleTimeString()
+        });
     }
     
     tickTimer(timer) {
         if (!timer.isRunning) return;
         
         const now = Date.now();
-        const elapsed = Math.floor((now - timer.startTime - timer.pausedTime) / 1000);
-        const remaining = Math.max(0, timer.totalSeconds - elapsed);
+        const totalElapsed = now - timer.startTime - timer.pausedTime;
+        const elapsedSeconds = totalElapsed / 1000;
+        const remaining = Math.max(0, timer.totalSeconds - elapsedSeconds);
+        const remainingSeconds = Math.ceil(remaining);
         
-        timer.remainingSeconds = remaining;
-        this.updateTimerDisplay(timer);
-        
-        // 最後 10 秒警告效果
-        if (remaining <= 10 && remaining > 0) {
-            const timerElement = document.getElementById(`timer-${timer.id}`);
-            if (timerElement) {
-                timerElement.classList.add('warning');
+        // 只有當剩餘秒數發生變化時才更新顯示
+        if (remainingSeconds !== timer.remainingSeconds) {
+            timer.remainingSeconds = remainingSeconds;
+            this.updateTimerDisplay(timer);
+            
+            // 最後 10 秒警告效果
+            if (remainingSeconds <= 10 && remainingSeconds > 0) {
+                const timerElement = document.getElementById(`timer-${timer.id}`);
+                if (timerElement) {
+                    timerElement.classList.add('warning');
+                }
             }
-        }
-        
-        if (remaining === 0) {
-            this.finishTimer(timer);
+            
+            if (remainingSeconds === 0) {
+                this.finishTimer(timer);
+            }
         }
     }
     
@@ -226,6 +239,17 @@ class BossTimer {
         timer.remainingSeconds = 0;
         
         clearInterval(timer.intervalId);
+        
+        // 調試信息
+        const actualEndTime = Date.now();
+        const expectedEndTime = timer.startTime + timer.totalSeconds * 1000;
+        const timeDifference = actualEndTime - expectedEndTime;
+        console.log(`計時器 ${timer.id} 完成:`, {
+            expectedEndTime: new Date(expectedEndTime).toLocaleTimeString(),
+            actualEndTime: new Date(actualEndTime).toLocaleTimeString(),
+            timeDifference: `${timeDifference}ms (${(timeDifference / 1000).toFixed(2)}秒)`,
+            pausedTime: `${timer.pausedTime}ms`
+        });
         
         const timerElement = document.getElementById(`timer-${timer.id}`);
         if (timerElement) {
