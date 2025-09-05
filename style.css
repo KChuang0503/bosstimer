@@ -5,7 +5,7 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Chiron GoRound TC', serif;
     background: linear-gradient(135deg, #efefbb 0%, #d4d3dd 100%);
     min-height: 100vh;
     display: flex;
@@ -26,6 +26,7 @@ body {
 }
 
 .main-layout {
+    min-height: 600px;
     display: flex;
     gap: 2rem;
     align-items: flex-start;
@@ -42,21 +43,23 @@ body {
     padding: 1.5rem;
     border-radius: 15px;
     box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
-    height: 100%;
+    max-height: 600px;
+    display: flex;
+    flex-direction: column;
 }
 
 h1 {
     color: #4a5568;
     margin-bottom: 1.5rem;
     font-size: 2.5rem;
-    font-weight: 300;
+    font-weight: 500;
 }
 
 h3 {
     color: #4a5568;
     margin-bottom: 1rem;
     font-size: 1.2rem;
-    font-weight: 500;
+    font-weight: 400;
 }
 
 .boss-selector {
@@ -66,6 +69,7 @@ h3 {
     align-items: flex-start;
     flex: 1;
     min-width: 120px;
+    margin-bottom: 1rem;
 }
 
 .boss-selector > div {
@@ -74,6 +78,7 @@ h3 {
     align-items: flex-start;
     flex: 1;
     min-width: 120px;
+    margin-bottom: 1rem;
 }
 
 .chapter-selector {
@@ -83,6 +88,7 @@ h3 {
     align-items: flex-start;
     flex: 1;
     min-width: 120px;
+    margin-bottom: 1rem;
 }
 
 .boss-selector label {
@@ -214,6 +220,7 @@ h3 {
     align-items: center;
     gap: 0.5rem;
     flex: 1;
+    margin-right: 1rem;
 }
 
 .volume-control label {
@@ -325,6 +332,7 @@ h3 {
 .btn-pause {
     background: linear-gradient(135deg, #ed8936, #dd6b20);
     color: white;
+    margin-right: .5rem;
 }
 
 .btn-pause:hover:not(:disabled) {
@@ -364,9 +372,34 @@ h3 {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.timers-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.timers-list::-webkit-scrollbar-track {
+    background: #f7fafc;
+    border-radius: 4px;
+}
+
+.timers-list::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 4px;
+    transition: background 0.3s ease;
+}
+
+.timers-list::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
 }
 
 .timer-item {
+    margin-top: 1rem;
     background: #f7fafc;
     padding: 1rem;
     border-radius: 10px;
@@ -396,6 +429,7 @@ h3 {
     font-weight: 600;
     color: #4a5568;
     font-size: 1rem;
+    margin-bottom: .5rem;
 }
 
 .timer-item-time {
@@ -404,7 +438,8 @@ h3 {
     color: #2d3748;
     font-family: 'Courier New', monospace;
     letter-spacing: 1px;
-}
+    margin-bottom: .5rem;
+
 
 .timer-item-controls {
     display: flex;
@@ -449,7 +484,7 @@ h3 {
     .active-timers {
         flex: none;
         width: 100%;
-        min-height: auto;
+        max-height: 400px;
     }
 }
 
