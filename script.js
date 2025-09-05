@@ -182,12 +182,14 @@ class BossTimer {
             remainingSeconds: totalSeconds,
             isRunning: true,
             isPaused: false,
-            intervalId: null
+            intervalId: null,
+            startTime: Date.now(),
+            pausedTime: 0
         };
         
         timer.intervalId = setInterval(() => {
             this.tickTimer(timer);
-        }, 1000);
+        }, 100);
         
         this.activeTimers.set(timerId, timer);
         this.updateTimersList();
@@ -196,18 +198,24 @@ class BossTimer {
     }
     
     tickTimer(timer) {
-        if (timer.remainingSeconds > 0) {
-            timer.remainingSeconds--;
-            this.updateTimerDisplay(timer);
-            
-            // 最後 10 秒警告效果
-            if (timer.remainingSeconds <= 10 && timer.remainingSeconds > 0) {
-                const timerElement = document.getElementById(`timer-${timer.id}`);
-                if (timerElement) {
-                    timerElement.classList.add('warning');
-                }
+        if (!timer.isRunning) return;
+        
+        const now = Date.now();
+        const elapsed = Math.floor((now - timer.startTime - timer.pausedTime) / 1000);
+        const remaining = Math.max(0, timer.totalSeconds - elapsed);
+        
+        timer.remainingSeconds = remaining;
+        this.updateTimerDisplay(timer);
+        
+        // 最後 10 秒警告效果
+        if (remaining <= 10 && remaining > 0) {
+            const timerElement = document.getElementById(`timer-${timer.id}`);
+            if (timerElement) {
+                timerElement.classList.add('warning');
             }
-        } else {
+        }
+        
+        if (remaining === 0) {
             this.finishTimer(timer);
         }
     }
@@ -333,13 +341,18 @@ class BossTimer {
             if (timer.isRunning) {
                 timer.isRunning = false;
                 timer.isPaused = true;
+                timer.pauseStartTime = Date.now();
                 clearInterval(timer.intervalId);
             } else {
                 timer.isRunning = true;
                 timer.isPaused = false;
+                if (timer.pauseStartTime) {
+                    timer.pausedTime += Date.now() - timer.pauseStartTime;
+                    timer.pauseStartTime = null;
+                }
                 timer.intervalId = setInterval(() => {
                     this.tickTimer(timer);
-                }, 1000);
+                }, 100);
             }
             this.updateTimersList();
         }
