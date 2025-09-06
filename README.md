@@ -96,20 +96,6 @@
 - **自動滾動**：使用 `scrollTo` API 實現平滑滾動效果
 - **響應式設計**：支援桌面和行動裝置
 
-## 安裝與使用
-
-### 本地使用
-1. 下載專案檔案
-2. 用瀏覽器開啟 `index.html`
-3. 允許瀏覽器通知權限（可選）
-
-### 線上部署
-可直接部署到任何靜態網站託管服務：
-- GitHub Pages
-- Netlify
-- Vercel
-- 任何支援靜態檔案的伺服器
-
 ## 開發說明
 
 ### 專案結構
@@ -132,10 +118,6 @@ bosstimer/
 ## 授權條款
 
 本專案採用 MIT 授權條款。詳見 [LICENSE](LICENSE) 檔案。
-
-## 貢獻指南
-
-歡迎提交 Issue 和 Pull Request！詳見 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 更新日誌
 
