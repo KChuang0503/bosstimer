@@ -657,20 +657,37 @@ class BossTimer {
             this.isHost = true;
             this.startGitHubPagesSync();
             
-            // 更新lightbox標題以包含中斷選項
-            this.lightboxTitle.innerHTML = `分享計時器 (${timersData.length} 個) <button id="stopSyncBtn" class="btn-stop-sync">停止同步</button>`;
+            // 更新lightbox標題
+            this.lightboxTitle.textContent = `分享計時器 (${timersData.length} 個)`;
+            
+            // 在lightbox header中添加停止同步按鈕
+            const stopSyncBtn = document.createElement('button');
+            stopSyncBtn.id = 'stopSyncBtn';
+            stopSyncBtn.className = 'btn-stop-sync';
+            stopSyncBtn.textContent = '停止同步';
+            stopSyncBtn.style.cssText = `
+                margin-left: 10px;
+                background: linear-gradient(135deg, #e53e3e, #c53030);
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+            `;
+            
+            // 將按鈕添加到lightbox header
+            this.lightboxTitle.parentNode.insertBefore(stopSyncBtn, this.lightboxTitle.nextSibling);
             
             // 為停止同步按鈕添加事件監聽器
-            setTimeout(() => {
-                const stopSyncBtn = document.getElementById('stopSyncBtn');
-                if (stopSyncBtn) {
-                    stopSyncBtn.addEventListener('click', () => {
-                        this.stopGitHubPagesSync();
-                        this.hideLightbox();
-                        this.status.textContent = '同步已停止';
-                    });
-                }
-            }, 100);
+            stopSyncBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.stopGitHubPagesSync();
+                this.hideLightbox();
+                this.status.textContent = '同步已停止';
+            });
             
             // 生成分享連結
             let baseUrl;
@@ -941,7 +958,8 @@ class BossTimer {
                         
                         // 延遲載入，確保頁面完全載入
                         setTimeout(() => {
-                            this.loadSharedTimers(timersData);
+                            // 客戶端直接使用同步載入方法
+                            this.updateTimersFromSync(timersData);
                         }, 500);
                     } else {
                         console.warn('分享連結中沒有有效的計時器數據');
@@ -1007,6 +1025,8 @@ class BossTimer {
     loadSharedTimerFromSync(timerData) {
         const timerId = this.timerIdCounter++;
         
+        console.log('創建同步計時器:', timerData);
+        
         const timer = {
             id: timerId,
             bossInfo: `${this.getChapterName(timerData.chapter)} - ${this.getBossName(timerData.boss)} (分流 ${timerData.server})`,
@@ -1024,6 +1044,8 @@ class BossTimer {
             isSynced: true // 標記為同步計時器
         };
         
+        console.log('計時器對象創建完成:', timer);
+        
         if (timer.isRunning) {
             timer.intervalId = setInterval(() => {
                 this.tickTimer(timer);
@@ -1031,7 +1053,9 @@ class BossTimer {
         }
         
         this.activeTimers.set(timerId, timer);
-        this.updateTimersList();
+        console.log('計時器已添加到Map，當前數量:', this.activeTimers.size);
+        
+        // 不在此處調用updateTimersList，讓上層方法統一調用
     }
     
     // 獲取章節名稱
@@ -1665,7 +1689,10 @@ class BossTimer {
     
     // 從同步數據更新計時器
     updateTimersFromSync(timersData) {
-        if (!timersData || timersData.length === 0) return;
+        if (!timersData || timersData.length === 0) {
+            console.log('沒有計時器數據需要同步');
+            return;
+        }
         
         console.log('開始同步計時器:', timersData);
         
@@ -1678,12 +1705,18 @@ class BossTimer {
             try {
                 this.loadSharedTimerFromSync(timerData);
                 loadedCount++;
+                console.log(`載入計時器 ${loadedCount}:`, timerData);
             } catch (error) {
                 console.error('載入同步計時器失敗:', error, timerData);
             }
         });
         
         console.log(`同步完成: 載入 ${loadedCount}/${timersData.length} 個計時器`);
+        console.log('當前計時器數量:', this.activeTimers.size);
+        
+        // 強制更新計時器列表顯示
+        this.updateTimersList();
+        
         this.status.textContent = `已同步 ${loadedCount} 個計時器`;
     }
     
