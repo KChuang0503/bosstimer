@@ -117,6 +117,9 @@ class BossTimer {
         
         // 檢查URL參數，如果有分享連結則自動載入
         this.checkForShareLink();
+        
+        // 添加調試信息
+        this.addDebugInfo();
     }
     
     updateBossOptions() {
@@ -643,7 +646,27 @@ class BossTimer {
             const compressedData = this.generateShortShareUrl(timersData);
             
             // 生成分享連結
-            const baseUrl = window.location.origin + window.location.pathname;
+            let baseUrl;
+            try {
+                // 嘗試獲取完整的URL
+                baseUrl = window.location.origin + window.location.pathname;
+                
+                // 確保URL格式正確
+                if (!baseUrl.startsWith('http')) {
+                    // 如果無法獲取正確的URL，使用相對路徑
+                    baseUrl = window.location.href.split('?')[0]; // 移除現有參數
+                }
+                
+                // 確保URL以/結尾（對於GitHub Pages）
+                if (!baseUrl.endsWith('/') && !baseUrl.includes('.')) {
+                    baseUrl += '/';
+                }
+            } catch (error) {
+                console.error('URL生成錯誤:', error);
+                // 降級方案：使用當前頁面URL
+                baseUrl = window.location.href.split('?')[0];
+            }
+            
             const shareUrl = `${baseUrl}?t=${compressedData}`;
             
             // 設定lightbox內容
@@ -742,7 +765,17 @@ class BossTimer {
     processShareLink(shareUrl) {
         try {
             // 從URL中提取分享數據
-            const url = new URL(shareUrl);
+            let url;
+            try {
+                url = new URL(shareUrl);
+            } catch (error) {
+                // 如果URL解析失敗，嘗試修復
+                if (!shareUrl.startsWith('http')) {
+                    shareUrl = window.location.origin + (shareUrl.startsWith('/') ? '' : '/') + shareUrl;
+                }
+                url = new URL(shareUrl);
+            }
+            
             let shareData = url.searchParams.get('t') || url.searchParams.get('share');
             
             if (!shareData) {
@@ -846,29 +879,44 @@ class BossTimer {
     }
     
     checkForShareLink() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const shareData = urlParams.get('t') || urlParams.get('share');
-        
-        if (shareData) {
-            try {
-                let timersData;
-                if (urlParams.has('t')) {
-                    // 新格式：簡短壓縮格式
-                    timersData = this.parseShortShareUrl(shareData);
-                } else {
-                    // 舊格式：Base64格式
-                    timersData = this.decodeTimersData(shareData);
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const shareData = urlParams.get('t') || urlParams.get('share');
+            
+            console.log('檢查分享連結:', { shareData, url: window.location.href });
+            
+            if (shareData) {
+                try {
+                    let timersData;
+                    if (urlParams.has('t')) {
+                        // 新格式：簡短壓縮格式
+                        console.log('使用新格式解析分享連結');
+                        timersData = this.parseShortShareUrl(shareData);
+                    } else {
+                        // 舊格式：Base64格式
+                        console.log('使用舊格式解析分享連結');
+                        timersData = this.decodeTimersData(shareData);
+                    }
+                    
+                    console.log('解析結果:', timersData);
+                    
+                    if (timersData && timersData.length > 0) {
+                        // 延遲載入，確保頁面完全載入
+                        setTimeout(() => {
+                            this.loadSharedTimers(timersData);
+                        }, 500);
+                    } else {
+                        console.warn('分享連結中沒有有效的計時器數據');
+                    }
+                } catch (error) {
+                    console.error('解析分享連結失敗:', error);
+                    this.status.textContent = '分享連結解析失敗，請檢查連結是否正確';
                 }
-                
-                if (timersData && timersData.length > 0) {
-                    // 延遲載入，確保頁面完全載入
-                    setTimeout(() => {
-                        this.loadSharedTimers(timersData);
-                    }, 500);
-                }
-            } catch (error) {
-                console.error('自動載入分享連結失敗:', error);
+            } else {
+                console.log('沒有找到分享連結參數');
             }
+        } catch (error) {
+            console.error('檢查分享連結時發生錯誤:', error);
         }
     }
     
@@ -1421,6 +1469,19 @@ class BossTimer {
         this.updateSyncStatus();
         
         console.log('同步服務已停止');
+    }
+    
+    // 添加調試信息
+    addDebugInfo() {
+        console.log('=== Boss Timer 調試信息 ===');
+        console.log('當前URL:', window.location.href);
+        console.log('Origin:', window.location.origin);
+        console.log('Pathname:', window.location.pathname);
+        console.log('Search:', window.location.search);
+        console.log('User Agent:', navigator.userAgent);
+        console.log('Protocol:', window.location.protocol);
+        console.log('Host:', window.location.host);
+        console.log('========================');
     }
 }
 
