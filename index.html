@@ -77,6 +77,28 @@
                     <button id="resetBtn" class="btn btn-reset">重置</button>
                 </div>
 
+                <div class="share-section">
+                    <h4>分享計時器</h4>
+                    <div class="share-controls">
+                        <button id="shareBtn" class="btn btn-share">🔗 生成分享連結</button>
+                        <button id="importBtn" class="btn btn-import">📥 匯入分享連結</button>
+                    </div>
+                    <div class="share-url-container" id="shareUrlContainer" style="display: none;">
+                        <label for="shareUrl">分享連結：</label>
+                        <div class="url-input-group">
+                            <input type="text" id="shareUrl" readonly>
+                            <button id="copyBtn" class="btn btn-copy">複製</button>
+                        </div>
+                    </div>
+                    <div class="import-container" id="importContainer" style="display: none;">
+                        <label for="importUrl">貼上分享連結：</label>
+                        <div class="url-input-group">
+                            <input type="text" id="importUrl" placeholder="貼上分享連結...">
+                            <button id="loadBtn" class="btn btn-load">載入</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="notification-controls">
                     <div class="volume-control">
                         <input type="range" id="volumeSlider" min="0" max="100" value="50" class="volume-slider">

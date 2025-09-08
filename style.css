@@ -584,3 +584,189 @@ h3 {
     transition: width 0.3s ease;
     border-radius: 2px;
 }
+
+/* 分享功能樣式 */
+.share-section {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 15px;
+    border: 2px solid #e2e8f0;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+}
+
+.share-section h4 {
+    color: #4a5568;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+.share-controls {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn-share {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    min-width: 140px;
+}
+
+.btn-share:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-import {
+    background: linear-gradient(135deg, #48bb78, #38a169);
+    color: white;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    min-width: 140px;
+}
+
+.btn-import:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(72, 187, 120, 0.4);
+}
+
+.share-url-container,
+.import-container {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f7fafc;
+    border-radius: 10px;
+    border: 2px solid #e2e8f0;
+    transition: all 0.3s ease;
+}
+
+.share-url-container label,
+.import-container label {
+    display: block;
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.url-input-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.url-input-group input {
+    flex: 1;
+    height: 40px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0 12px;
+    font-size: 0.9rem;
+    color: #4a5568;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.url-input-group input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.url-input-group input[readonly] {
+    background: #f7fafc;
+    color: #666;
+    cursor: pointer;
+}
+
+.btn-copy,
+.btn-load {
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    min-width: 60px;
+    height: 40px;
+    border-radius: 8px;
+}
+
+.btn-copy {
+    background: linear-gradient(135deg, #4299e1, #3182ce);
+    color: white;
+}
+
+.btn-copy:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(66, 153, 225, 0.4);
+}
+
+.btn-load {
+    background: linear-gradient(135deg, #ed8936, #dd6b20);
+    color: white;
+}
+
+.btn-load:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(237, 137, 54, 0.4);
+}
+
+/* 分享功能動畫效果 */
+.share-url-container,
+.import-container {
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 響應式設計 - 分享功能 */
+@media (max-width: 768px) {
+    .share-controls {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .btn-share,
+    .btn-import {
+        width: 100%;
+        max-width: 200px;
+    }
+    
+    .url-input-group {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .url-input-group input {
+        width: 100%;
+    }
+    
+    .btn-copy,
+    .btn-load {
+        width: 100%;
+    }
+}
+
+@media (max-width: 600px) {
+    .share-section {
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .share-section h4 {
+        font-size: 1rem;
+    }
+}

@@ -25,6 +25,16 @@ class BossTimer {
         this.volumeValue = document.getElementById('volumeValue');
         this.muteBtn = document.getElementById('muteBtn');
         
+        // 分享功能元素
+        this.shareBtn = document.getElementById('shareBtn');
+        this.importBtn = document.getElementById('importBtn');
+        this.shareUrlContainer = document.getElementById('shareUrlContainer');
+        this.importContainer = document.getElementById('importContainer');
+        this.shareUrl = document.getElementById('shareUrl');
+        this.importUrl = document.getElementById('importUrl');
+        this.copyBtn = document.getElementById('copyBtn');
+        this.loadBtn = document.getElementById('loadBtn');
+        
         // 音效狀態
         this.volume = 0.8; // 預設音量 80%
         this.isMuted = false;
@@ -70,6 +80,15 @@ class BossTimer {
                 this.resetAll();
             }
         });
+        
+        // 分享功能事件
+        this.shareBtn.addEventListener('click', () => this.generateShareLink());
+        this.importBtn.addEventListener('click', () => this.toggleImportContainer());
+        this.copyBtn.addEventListener('click', () => this.copyShareLink());
+        this.loadBtn.addEventListener('click', () => this.loadFromShareLink());
+        
+        // 檢查URL參數，如果有分享連結則自動載入
+        this.checkForShareLink();
     }
     
     updateBossOptions() {
@@ -571,6 +590,218 @@ class BossTimer {
             oscillator.stop(audioContext.currentTime + 0.8);
         } catch (error) {
             console.log('音頻播放不可用');
+        }
+    }
+    
+    // 分享功能方法
+    generateShareLink() {
+        if (this.activeTimers.size === 0) {
+            this.status.textContent = '請先新增計時器再分享';
+            return;
+        }
+        
+        try {
+            // 收集所有計時器的數據
+            const timersData = Array.from(this.activeTimers.values()).map(timer => ({
+                chapter: timer.chapter,
+                boss: timer.boss,
+                server: timer.server,
+                totalSeconds: timer.totalSeconds,
+                remainingSeconds: timer.remainingSeconds,
+                isPaused: timer.isPaused
+            }));
+            
+            // 編碼數據
+            const encodedData = this.encodeTimersData(timersData);
+            
+            // 生成分享連結
+            const baseUrl = window.location.origin + window.location.pathname;
+            const shareUrl = `${baseUrl}?share=${encodedData}`;
+            
+            // 顯示分享連結
+            this.shareUrl.value = shareUrl;
+            this.shareUrlContainer.style.display = 'block';
+            this.importContainer.style.display = 'none';
+            
+            this.status.textContent = `已生成分享連結，包含 ${timersData.length} 個計時器`;
+            
+        } catch (error) {
+            console.error('生成分享連結失敗:', error);
+            this.status.textContent = '生成分享連結失敗，請重試';
+        }
+    }
+    
+    toggleImportContainer() {
+        const isVisible = this.importContainer.style.display !== 'none';
+        this.importContainer.style.display = isVisible ? 'none' : 'block';
+        this.shareUrlContainer.style.display = 'none';
+        
+        if (!isVisible) {
+            this.importUrl.focus();
+        }
+    }
+    
+    copyShareLink() {
+        this.shareUrl.select();
+        this.shareUrl.setSelectionRange(0, 99999); // 對於移動設備
+        
+        try {
+            document.execCommand('copy');
+            this.status.textContent = '分享連結已複製到剪貼板';
+            
+            // 顯示複製成功動畫
+            this.copyBtn.textContent = '✓ 已複製';
+            this.copyBtn.style.background = 'linear-gradient(135deg, #48bb78, #38a169)';
+            
+            setTimeout(() => {
+                this.copyBtn.textContent = '複製';
+                this.copyBtn.style.background = '';
+            }, 2000);
+            
+        } catch (error) {
+            console.error('複製失敗:', error);
+            this.status.textContent = '複製失敗，請手動複製連結';
+        }
+    }
+    
+    loadFromShareLink() {
+        const shareUrl = this.importUrl.value.trim();
+        
+        if (!shareUrl) {
+            this.status.textContent = '請輸入分享連結';
+            return;
+        }
+        
+        try {
+            // 從URL中提取分享數據
+            const url = new URL(shareUrl);
+            const shareData = url.searchParams.get('share');
+            
+            if (!shareData) {
+                this.status.textContent = '無效的分享連結';
+                return;
+            }
+            
+            // 解碼數據
+            const timersData = this.decodeTimersData(shareData);
+            
+            if (!timersData || timersData.length === 0) {
+                this.status.textContent = '分享連結中沒有計時器數據';
+                return;
+            }
+            
+            // 清除現有計時器
+            this.clearAllTimers();
+            
+            // 載入分享的計時器
+            let loadedCount = 0;
+            timersData.forEach(timerData => {
+                try {
+                    this.loadSharedTimer(timerData);
+                    loadedCount++;
+                } catch (error) {
+                    console.error('載入計時器失敗:', error);
+                }
+            });
+            
+            this.status.textContent = `成功載入 ${loadedCount} 個計時器`;
+            this.importContainer.style.display = 'none';
+            this.importUrl.value = '';
+            
+        } catch (error) {
+            console.error('載入分享連結失敗:', error);
+            this.status.textContent = '載入分享連結失敗，請檢查連結是否正確';
+        }
+    }
+    
+    checkForShareLink() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const shareData = urlParams.get('share');
+        
+        if (shareData) {
+            try {
+                const timersData = this.decodeTimersData(shareData);
+                if (timersData && timersData.length > 0) {
+                    // 延遲載入，確保頁面完全載入
+                    setTimeout(() => {
+                        this.loadSharedTimers(timersData);
+                    }, 500);
+                }
+            } catch (error) {
+                console.error('自動載入分享連結失敗:', error);
+            }
+        }
+    }
+    
+    loadSharedTimers(timersData) {
+        this.clearAllTimers();
+        
+        let loadedCount = 0;
+        timersData.forEach(timerData => {
+            try {
+                this.loadSharedTimer(timerData);
+                loadedCount++;
+            } catch (error) {
+                console.error('載入計時器失敗:', error);
+            }
+        });
+        
+        this.status.textContent = `已自動載入 ${loadedCount} 個分享的計時器`;
+    }
+    
+    loadSharedTimer(timerData) {
+        // 設定選擇器
+        this.chapterSelect.value = timerData.chapter;
+        this.updateBossOptions();
+        this.bossSelect.value = timerData.boss;
+        this.serverSelect.value = timerData.server;
+        
+        // 計算剩餘時間並設定輸入框
+        const remainingSeconds = timerData.remainingSeconds || timerData.totalSeconds;
+        const hours = Math.floor(remainingSeconds / 3600);
+        const minutes = Math.floor((remainingSeconds % 3600) / 60);
+        const seconds = remainingSeconds % 60;
+        
+        this.hoursInput.value = hours;
+        this.minutesInput.value = minutes;
+        this.secondsInput.value = seconds;
+        
+        // 新增計時器
+        this.addTimer();
+        
+        // 如果計時器原本是暫停狀態，則暫停它
+        if (timerData.isPaused) {
+            const lastTimer = Array.from(this.activeTimers.values()).pop();
+            if (lastTimer) {
+                this.pauseSpecificTimer(lastTimer.id);
+            }
+        }
+    }
+    
+    clearAllTimers() {
+        // 清除所有現有計時器
+        this.activeTimers.forEach(timer => {
+            clearInterval(timer.intervalId);
+        });
+        this.activeTimers.clear();
+        this.updateTimersList();
+    }
+    
+    encodeTimersData(timersData) {
+        try {
+            const jsonString = JSON.stringify(timersData);
+            return btoa(encodeURIComponent(jsonString));
+        } catch (error) {
+            throw new Error('編碼數據失敗');
+        }
+    }
+    
+    decodeTimersData(encodedData) {
+        try {
+            const jsonString = decodeURIComponent(atob(encodedData));
+            return JSON.parse(jsonString);
+        } catch (error) {
+            throw new Error('解碼數據失敗');
         }
     }
 }
