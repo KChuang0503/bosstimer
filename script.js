@@ -3,6 +3,14 @@ class BossTimer {
         this.activeTimers = new Map();
         this.timerIdCounter = 0;
         
+        // 同步相關屬性
+        this.syncEnabled = false;
+        this.roomId = null;
+        this.isHost = false;
+        this.websocket = null;
+        this.syncInterval = null;
+        this.lastSyncTime = 0;
+        
         this.initializeElements();
         this.bindEvents();
         this.updateBossOptions();
@@ -28,12 +36,22 @@ class BossTimer {
         // 分享功能元素
         this.shareBtn = document.getElementById('shareBtn');
         this.importBtn = document.getElementById('importBtn');
-        this.shareUrlContainer = document.getElementById('shareUrlContainer');
-        this.importContainer = document.getElementById('importContainer');
+        this.lightbox = document.getElementById('lightbox');
+        this.lightboxTitle = document.getElementById('lightboxTitle');
+        this.shareContent = document.getElementById('shareContent');
+        this.importContent = document.getElementById('importContent');
         this.shareUrl = document.getElementById('shareUrl');
         this.importUrl = document.getElementById('importUrl');
         this.copyBtn = document.getElementById('copyBtn');
+        this.pasteBtn = document.getElementById('pasteBtn');
         this.loadBtn = document.getElementById('loadBtn');
+        this.closeLightbox = document.getElementById('closeLightbox');
+        this.cancelBtn = document.getElementById('cancelBtn');
+        
+        // 同步狀態元素
+        this.syncStatus = document.getElementById('syncStatus');
+        this.syncRole = document.getElementById('syncRole');
+        this.roomIdElement = document.getElementById('roomId');
         
         // 音效狀態
         this.volume = 0.8; // 預設音量 80%
@@ -82,10 +100,20 @@ class BossTimer {
         });
         
         // 分享功能事件
-        this.shareBtn.addEventListener('click', () => this.generateShareLink());
-        this.importBtn.addEventListener('click', () => this.toggleImportContainer());
+        this.shareBtn.addEventListener('click', () => this.showShareLightbox());
+        this.importBtn.addEventListener('click', () => this.showImportLightbox());
         this.copyBtn.addEventListener('click', () => this.copyShareLink());
+        this.pasteBtn.addEventListener('click', () => this.pasteFromClipboard());
         this.loadBtn.addEventListener('click', () => this.loadFromShareLink());
+        this.closeLightbox.addEventListener('click', () => this.hideLightbox());
+        this.cancelBtn.addEventListener('click', () => this.hideLightbox());
+        
+        // 點擊lightbox背景關閉
+        this.lightbox.addEventListener('click', (e) => {
+            if (e.target === this.lightbox) {
+                this.hideLightbox();
+            }
+        });
         
         // 檢查URL參數，如果有分享連結則自動載入
         this.checkForShareLink();
@@ -594,7 +622,7 @@ class BossTimer {
     }
     
     // 分享功能方法
-    generateShareLink() {
+    showShareLightbox() {
         if (this.activeTimers.size === 0) {
             this.status.textContent = '請先新增計時器再分享';
             return;
@@ -611,19 +639,21 @@ class BossTimer {
                 isPaused: timer.isPaused
             }));
             
-            // 編碼數據
-            const encodedData = this.encodeTimersData(timersData);
+            // 生成簡短的分享連結
+            const compressedData = this.generateShortShareUrl(timersData);
             
             // 生成分享連結
             const baseUrl = window.location.origin + window.location.pathname;
-            const shareUrl = `${baseUrl}?share=${encodedData}`;
+            const shareUrl = `${baseUrl}?t=${compressedData}`;
             
-            // 顯示分享連結
+            // 設定lightbox內容
+            this.lightboxTitle.textContent = `分享計時器 (${timersData.length} 個)`;
             this.shareUrl.value = shareUrl;
-            this.shareUrlContainer.style.display = 'block';
-            this.importContainer.style.display = 'none';
+            this.shareContent.style.display = 'block';
+            this.importContent.style.display = 'none';
             
-            this.status.textContent = `已生成分享連結，包含 ${timersData.length} 個計時器`;
+            // 顯示lightbox
+            this.showLightbox();
             
         } catch (error) {
             console.error('生成分享連結失敗:', error);
@@ -631,14 +661,37 @@ class BossTimer {
         }
     }
     
-    toggleImportContainer() {
-        const isVisible = this.importContainer.style.display !== 'none';
-        this.importContainer.style.display = isVisible ? 'none' : 'block';
-        this.shareUrlContainer.style.display = 'none';
+    showImportLightbox() {
+        this.lightboxTitle.textContent = '匯入分享連結';
+        this.importContent.style.display = 'block';
+        this.shareContent.style.display = 'none';
+        this.importUrl.value = '';
+        this.showLightbox();
         
-        if (!isVisible) {
+        // 聚焦到輸入框
+        setTimeout(() => {
             this.importUrl.focus();
-        }
+        }, 300);
+    }
+    
+    showLightbox() {
+        this.lightbox.style.display = 'flex';
+        document.body.style.overflow = 'hidden'; // 防止背景滾動
+        
+        // 添加動畫效果
+        setTimeout(() => {
+            this.lightbox.classList.add('show');
+        }, 10);
+    }
+    
+    hideLightbox() {
+        this.lightbox.classList.remove('show');
+        document.body.style.overflow = ''; // 恢復背景滾動
+        
+        // 等待動畫完成後隱藏
+        setTimeout(() => {
+            this.lightbox.style.display = 'none';
+        }, 300);
     }
     
     copyShareLink() {
@@ -665,25 +718,47 @@ class BossTimer {
     }
     
     loadFromShareLink() {
-        const shareUrl = this.importUrl.value.trim();
+        let shareUrl = this.importUrl.value.trim();
         
+        // 如果輸入框為空，嘗試從剪貼板讀取
         if (!shareUrl) {
-            this.status.textContent = '請輸入分享連結';
+            this.getClipboardText().then(text => {
+                if (text && (text.includes('?t=') || text.includes('?share='))) {
+                    this.importUrl.value = text;
+                    this.processShareLink(text);
+                } else {
+                    this.status.textContent = '請輸入分享連結或確保剪貼板中有有效的分享連結';
+                }
+            }).catch(() => {
+                this.status.textContent = '請輸入分享連結';
+            });
             return;
         }
         
+        this.processShareLink(shareUrl);
+    }
+    
+    // 處理分享連結
+    processShareLink(shareUrl) {
         try {
             // 從URL中提取分享數據
             const url = new URL(shareUrl);
-            const shareData = url.searchParams.get('share');
+            let shareData = url.searchParams.get('t') || url.searchParams.get('share');
             
             if (!shareData) {
                 this.status.textContent = '無效的分享連結';
                 return;
             }
             
-            // 解碼數據
-            const timersData = this.decodeTimersData(shareData);
+            // 解碼數據（支援新舊格式）
+            let timersData;
+            if (url.searchParams.has('t')) {
+                // 新格式：簡短壓縮格式
+                timersData = this.parseShortShareUrl(shareData);
+            } else {
+                // 舊格式：Base64格式
+                timersData = this.decodeTimersData(shareData);
+            }
             
             if (!timersData || timersData.length === 0) {
                 this.status.textContent = '分享連結中沒有計時器數據';
@@ -705,7 +780,7 @@ class BossTimer {
             });
             
             this.status.textContent = `成功載入 ${loadedCount} 個計時器`;
-            this.importContainer.style.display = 'none';
+            this.hideLightbox();
             this.importUrl.value = '';
             
         } catch (error) {
@@ -714,13 +789,77 @@ class BossTimer {
         }
     }
     
+    // 從剪貼板貼上
+    async pasteFromClipboard() {
+        try {
+            const text = await this.getClipboardText();
+            if (text && (text.includes('?t=') || text.includes('?share='))) {
+                this.importUrl.value = text;
+                this.status.textContent = '已從剪貼板貼上分享連結';
+                
+                // 自動聚焦到載入按鈕
+                setTimeout(() => {
+                    this.loadBtn.focus();
+                }, 100);
+            } else {
+                this.status.textContent = '剪貼板中沒有有效的分享連結';
+            }
+        } catch (error) {
+            console.error('貼上失敗:', error);
+            this.status.textContent = '無法讀取剪貼板，請手動貼上連結';
+        }
+    }
+    
+    // 從剪貼板讀取文本
+    async getClipboardText() {
+        try {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                return await navigator.clipboard.readText();
+            } else {
+                // 降級方案：使用舊的API
+                return new Promise((resolve, reject) => {
+                    const textArea = document.createElement('textarea');
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    
+                    try {
+                        const successful = document.execCommand('paste');
+                        if (successful) {
+                            resolve(textArea.value);
+                        } else {
+                            reject(new Error('無法讀取剪貼板'));
+                        }
+                    } catch (err) {
+                        reject(err);
+                    } finally {
+                        document.body.removeChild(textArea);
+                    }
+                });
+            }
+        } catch (error) {
+            throw new Error('無法讀取剪貼板');
+        }
+    }
+    
     checkForShareLink() {
         const urlParams = new URLSearchParams(window.location.search);
-        const shareData = urlParams.get('share');
+        const shareData = urlParams.get('t') || urlParams.get('share');
         
         if (shareData) {
             try {
-                const timersData = this.decodeTimersData(shareData);
+                let timersData;
+                if (urlParams.has('t')) {
+                    // 新格式：簡短壓縮格式
+                    timersData = this.parseShortShareUrl(shareData);
+                } else {
+                    // 舊格式：Base64格式
+                    timersData = this.decodeTimersData(shareData);
+                }
+                
                 if (timersData && timersData.length > 0) {
                     // 延遲載入，確保頁面完全載入
                     setTimeout(() => {
@@ -789,8 +928,22 @@ class BossTimer {
     
     encodeTimersData(timersData) {
         try {
-            const jsonString = JSON.stringify(timersData);
-            return btoa(encodeURIComponent(jsonString));
+            // 壓縮數據結構，只保留必要信息
+            const compressedData = timersData.map(timer => ({
+                c: timer.chapter,      // chapter
+                b: timer.boss,         // boss
+                s: timer.server,       // server
+                t: timer.totalSeconds, // totalSeconds
+                r: timer.remainingSeconds, // remainingSeconds
+                p: timer.isPaused ? 1 : 0  // isPaused (1 or 0)
+            }));
+            
+            const jsonString = JSON.stringify(compressedData);
+            
+            // 使用更簡短的編碼方式
+            // 先壓縮JSON，然後使用Base64編碼
+            const compressed = this.compressString(jsonString);
+            return btoa(compressed);
         } catch (error) {
             throw new Error('編碼數據失敗');
         }
@@ -798,11 +951,476 @@ class BossTimer {
     
     decodeTimersData(encodedData) {
         try {
-            const jsonString = decodeURIComponent(atob(encodedData));
-            return JSON.parse(jsonString);
+            const compressed = atob(encodedData);
+            const jsonString = this.decompressString(compressed);
+            const compressedData = JSON.parse(jsonString);
+            
+            // 還原完整的數據結構
+            return compressedData.map(timer => ({
+                chapter: timer.c,
+                boss: timer.b,
+                server: timer.s,
+                totalSeconds: timer.t,
+                remainingSeconds: timer.r,
+                isPaused: timer.p === 1
+            }));
         } catch (error) {
             throw new Error('解碼數據失敗');
         }
+    }
+    
+    // 簡單的字符串壓縮
+    compressString(str) {
+        // 移除所有空格和換行，並優化JSON格式
+        return str.replace(/\s+/g, '');
+    }
+    
+    // 字符串解壓縮
+    decompressString(str) {
+        return str;
+    }
+    
+    // 超壓縮字符集（64個字符，包含所有URL安全字符）
+    ULTRA_COMPRESS_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    
+    // 生成超壓縮分享連結（目標24字以內）
+    generateShortShareUrl(timersData) {
+        try {
+            // 使用極簡數據結構，每個計時器用最少的字符表示
+            const ultraCompressed = timersData.map(timer => {
+                const mapId = this.getMapId(timer.chapter, timer.boss);
+                const serverId = parseInt(timer.server);
+                
+                // 將時間轉換為更短的格式（分鐘為單位，最大999分鐘）
+                const totalMinutes = Math.min(Math.floor(timer.totalSeconds / 60), 999);
+                const remainingMinutes = Math.min(Math.floor(timer.remainingSeconds / 60), 999);
+                
+                // 使用單字符分隔符和緊湊格式
+                return `${mapId}${serverId}${totalMinutes.toString().padStart(3, '0')}${remainingMinutes.toString().padStart(3, '0')}${timer.isPaused ? '1' : '0'}`;
+            });
+            
+            // 將所有計時器數據合併
+            const dataString = ultraCompressed.join('');
+            
+            // 使用更激進的壓縮
+            const compressed = this.ultraCompress(dataString);
+            
+            // 如果還是太長，使用二進制壓縮
+            if (compressed.length > 20) {
+                return this.binaryCompress(timersData);
+            }
+            
+            return compressed;
+        } catch (error) {
+            throw new Error('生成超壓縮連結失敗');
+        }
+    }
+    
+    // 生成帶同步功能的分享連結
+    generateSyncShareUrl(timersData) {
+        try {
+            // 生成房間ID（6位隨機字符串）
+            this.roomId = this.generateRoomId();
+            this.isHost = true;
+            
+            // 啟動同步服務
+            this.startSyncService();
+            
+            // 生成基本的壓縮數據
+            const basicCompressed = this.generateShortShareUrl(timersData);
+            
+            // 加入房間ID前綴和同步標記
+            return `sync_${this.roomId}_${basicCompressed}`;
+        } catch (error) {
+            throw new Error('生成同步分享連結失敗');
+        }
+    }
+    
+    // 生成房間ID
+    generateRoomId() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < 6; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+    
+    // 二進制壓縮（最後手段）
+    binaryCompress(timersData) {
+        try {
+            // 將每個計時器壓縮為固定長度的二進制字符串
+            let binaryString = '';
+            
+            for (const timer of timersData) {
+                const mapId = this.getMapId(timer.chapter, timer.boss);
+                const serverId = parseInt(timer.server);
+                const totalMinutes = Math.min(Math.floor(timer.totalSeconds / 60), 999);
+                const remainingMinutes = Math.min(Math.floor(timer.remainingSeconds / 60), 999);
+                const isPaused = timer.isPaused ? 1 : 0;
+                
+                // 每個計時器用28位表示：mapId(4位) + serverId(3位) + totalMinutes(10位) + remainingMinutes(10位) + paused(1位)
+                const timerBinary = 
+                    mapId.toString(2).padStart(4, '0') +
+                    serverId.toString(2).padStart(3, '0') +
+                    totalMinutes.toString(2).padStart(10, '0') +
+                    remainingMinutes.toString(2).padStart(10, '0') +
+                    isPaused.toString(2);
+                
+                binaryString += timerBinary;
+            }
+            
+            // 將二進制轉換為Base64-like編碼
+            return this.binaryToBase64(binaryString);
+        } catch (error) {
+            throw new Error('二進制壓縮失敗');
+        }
+    }
+    
+    // 二進制轉Base64
+    binaryToBase64(binaryString) {
+        let result = '';
+        for (let i = 0; i < binaryString.length; i += 6) {
+            const chunk = binaryString.substr(i, 6).padEnd(6, '0');
+            const value = parseInt(chunk, 2);
+            result += this.ULTRA_COMPRESS_CHARS[value];
+        }
+        return result;
+    }
+    
+    // Base64轉二進制
+    base64ToBinary(base64String) {
+        let result = '';
+        for (let i = 0; i < base64String.length; i++) {
+            const value = this.ULTRA_COMPRESS_CHARS.indexOf(base64String[i]);
+            if (value !== -1) {
+                result += value.toString(2).padStart(6, '0');
+            }
+        }
+        return result;
+    }
+    
+    // 解析超壓縮分享連結
+    parseShortShareUrl(compressedData) {
+        try {
+            // 檢查是否為同步格式
+            if (compressedData.startsWith('sync_')) {
+                const parts = compressedData.split('_');
+                if (parts.length >= 3) {
+                    this.roomId = parts[1];
+                    this.isHost = false;
+                    compressedData = parts[2];
+                    
+                    // 啟動同步服務（作為客戶端）
+                    this.startSyncService();
+                }
+            }
+            
+            // 檢查是否為二進制壓縮格式
+            if (this.isBinaryCompressed(compressedData)) {
+                return this.parseBinaryCompressed(compressedData);
+            }
+            
+            // 解壓縮數據
+            const dataString = this.ultraDecompress(compressedData);
+            
+            // 解析計時器數據（新格式：無分隔符）
+            const timersData = [];
+            let i = 0;
+            
+            while (i < dataString.length) {
+                // 每個計時器用固定長度：mapId(1-2位) + serverId(1位) + totalMinutes(3位) + remainingMinutes(3位) + paused(1位)
+                const mapIdStr = dataString.substr(i, 2);
+                const mapId = parseInt(mapIdStr);
+                i += 2;
+                
+                const serverId = parseInt(dataString[i]);
+                i += 1;
+                
+                const totalMinutes = parseInt(dataString.substr(i, 3));
+                i += 3;
+                
+                const remainingMinutes = parseInt(dataString.substr(i, 3));
+                i += 3;
+                
+                const isPaused = dataString[i] === '1';
+                i += 1;
+                
+                // 解析地圖ID
+                const { chapter, boss } = this.parseMapId(mapId);
+                
+                timersData.push({
+                    chapter: chapter.toString(),
+                    boss: boss,
+                    server: serverId.toString(),
+                    totalSeconds: totalMinutes * 60,
+                    remainingSeconds: remainingMinutes * 60,
+                    isPaused: isPaused
+                });
+            }
+            
+            return timersData;
+        } catch (error) {
+            throw new Error('解析超壓縮連結失敗');
+        }
+    }
+    
+    // 檢查是否為二進制壓縮格式
+    isBinaryCompressed(data) {
+        // 如果數據長度很短且只包含Base64字符，可能是二進制壓縮
+        return data.length <= 24 && /^[A-Za-z0-9\-_]+$/.test(data);
+    }
+    
+    // 解析二進制壓縮數據
+    parseBinaryCompressed(compressedData) {
+        try {
+            const binaryString = this.base64ToBinary(compressedData);
+            const timersData = [];
+            
+            // 每個計時器用28位表示
+            for (let i = 0; i < binaryString.length; i += 28) {
+                const timerBinary = binaryString.substr(i, 28).padEnd(28, '0');
+                
+                const mapId = parseInt(timerBinary.substr(0, 4), 2);
+                const serverId = parseInt(timerBinary.substr(4, 3), 2);
+                const totalMinutes = parseInt(timerBinary.substr(7, 10), 2);
+                const remainingMinutes = parseInt(timerBinary.substr(17, 10), 2);
+                const isPaused = timerBinary.substr(27, 1) === '1';
+                
+                // 解析地圖ID
+                const { chapter, boss } = this.parseMapId(mapId);
+                
+                timersData.push({
+                    chapter: chapter.toString(),
+                    boss: boss,
+                    server: serverId.toString(),
+                    totalSeconds: totalMinutes * 60,
+                    remainingSeconds: remainingMinutes * 60,
+                    isPaused: isPaused
+                });
+            }
+            
+            return timersData;
+        } catch (error) {
+            throw new Error('解析二進制壓縮失敗');
+        }
+    }
+    
+    // 獲取地圖ID（將章節和地圖編碼為單一數字）
+    getMapId(chapter, boss) {
+        const chapterNum = parseInt(chapter);
+        const bossNum = parseInt(boss.split('-')[1]);
+        return (chapterNum - 7) * 10 + bossNum; // 7-1=0, 7-2=1, 8-1=10, 8-2=11, etc.
+    }
+    
+    // 解析地圖ID
+    parseMapId(mapId) {
+        const chapter = Math.floor(mapId / 10) + 7;
+        const boss = mapId % 10;
+        return { chapter, boss: `${chapter}-${boss}` };
+    }
+    
+    // 超壓縮編碼（使用64字符集）
+    ultraCompress(str) {
+        let result = '';
+        let num = 0;
+        let bits = 0;
+        
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            num = (num << 8) + char;
+            bits += 8;
+            
+            while (bits >= 6) {
+                result += this.ULTRA_COMPRESS_CHARS[(num >> (bits - 6)) & 63];
+                bits -= 6;
+                num &= (1 << bits) - 1;
+            }
+        }
+        
+        if (bits > 0) {
+            result += this.ULTRA_COMPRESS_CHARS[(num << (6 - bits)) & 63];
+        }
+        
+        return result;
+    }
+    
+    // 超壓縮解碼
+    ultraDecompress(compressed) {
+        let result = '';
+        let num = 0;
+        let bits = 0;
+        
+        for (let i = 0; i < compressed.length; i++) {
+            const char = this.ULTRA_COMPRESS_CHARS.indexOf(compressed[i]);
+            if (char === -1) continue;
+            
+            num = (num << 6) + char;
+            bits += 6;
+            
+            while (bits >= 8) {
+                result += String.fromCharCode((num >> (bits - 8)) & 255);
+                bits -= 8;
+                num &= (1 << bits) - 1;
+            }
+        }
+        
+        return result;
+    }
+    
+    // 啟動同步服務
+    startSyncService() {
+        if (this.syncEnabled || !this.roomId) return;
+        
+        this.syncEnabled = true;
+        
+        // 顯示同步狀態指示器
+        this.updateSyncStatus();
+        
+        // 使用WebSocket進行實時同步
+        this.connectWebSocket();
+        
+        // 定期同步（備用方案）
+        this.syncInterval = setInterval(() => {
+            this.syncTimers();
+        }, 5000); // 每5秒同步一次
+        
+        console.log(`同步服務已啟動 - 房間: ${this.roomId}, 角色: ${this.isHost ? '主機' : '客戶端'}`);
+    }
+    
+    // 更新同步狀態顯示
+    updateSyncStatus() {
+        if (this.syncEnabled && this.roomId) {
+            this.syncStatus.style.display = 'block';
+            this.syncRole.textContent = this.isHost ? '主機' : '客戶端';
+            this.roomIdElement.textContent = this.roomId;
+        } else {
+            this.syncStatus.style.display = 'none';
+        }
+    }
+    
+    // 連接WebSocket
+    connectWebSocket() {
+        try {
+            // 暫時禁用WebSocket，使用HTTP輪詢
+            console.log('使用HTTP輪詢同步模式');
+            this.fallbackToHttpSync();
+            
+        } catch (error) {
+            console.error('同步服務初始化失敗:', error);
+            this.fallbackToHttpSync();
+        }
+    }
+    
+    // 降級到HTTP輪詢同步
+    fallbackToHttpSync() {
+        console.log('使用簡化同步模式');
+        // 暫時禁用同步功能，只顯示狀態
+        this.status.textContent = this.isHost ? '已建立同步房間（簡化模式）' : '已加入同步房間（簡化模式）';
+    }
+    
+    // 處理同步消息
+    handleSyncMessage(data) {
+        try {
+            const message = JSON.parse(data);
+            
+            if (message.type === 'sync' && message.roomId === this.roomId) {
+                if (!this.isHost) {
+                    // 客戶端接收主機的更新
+                    this.updateTimersFromSync(message.timers);
+                }
+            }
+        } catch (error) {
+            console.error('處理同步消息失敗:', error);
+        }
+    }
+    
+    // 同步計時器
+    syncTimers() {
+        if (!this.syncEnabled || !this.roomId) return;
+        
+        // 暫時禁用實際同步，只記錄狀態
+        console.log(`同步檢查 - 房間: ${this.roomId}, 角色: ${this.isHost ? '主機' : '客戶端'}`);
+    }
+    
+    // 廣播計時器更新（主機）
+    broadcastTimerUpdate() {
+        if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) return;
+        
+        const timersData = Array.from(this.activeTimers.values()).map(timer => ({
+            id: timer.id,
+            chapter: timer.chapter,
+            boss: timer.boss,
+            server: timer.server,
+            totalSeconds: timer.totalSeconds,
+            remainingSeconds: timer.remainingSeconds,
+            isPaused: timer.isPaused,
+            lastUpdate: Date.now()
+        }));
+        
+        const message = {
+            type: 'sync',
+            roomId: this.roomId,
+            timers: timersData,
+            timestamp: Date.now()
+        };
+        
+        this.websocket.send(JSON.stringify(message));
+    }
+    
+    // 請求計時器更新（客戶端）
+    requestTimerUpdate() {
+        if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) return;
+        
+        const message = {
+            type: 'request',
+            roomId: this.roomId,
+            timestamp: Date.now()
+        };
+        
+        this.websocket.send(JSON.stringify(message));
+    }
+    
+    // 從同步數據更新計時器
+    updateTimersFromSync(timersData) {
+        if (!timersData || timersData.length === 0) return;
+        
+        // 清除現有計時器
+        this.clearAllTimers();
+        
+        // 載入同步的計時器
+        timersData.forEach(timerData => {
+            try {
+                this.loadSharedTimer(timerData);
+            } catch (error) {
+                console.error('載入同步計時器失敗:', error);
+            }
+        });
+        
+        this.status.textContent = `已同步 ${timersData.length} 個計時器`;
+    }
+    
+    // 停止同步服務
+    stopSyncService() {
+        this.syncEnabled = false;
+        
+        if (this.websocket) {
+            this.websocket.close();
+            this.websocket = null;
+        }
+        
+        if (this.syncInterval) {
+            clearInterval(this.syncInterval);
+            this.syncInterval = null;
+        }
+        
+        this.roomId = null;
+        this.isHost = false;
+        
+        // 隱藏同步狀態指示器
+        this.updateSyncStatus();
+        
+        console.log('同步服務已停止');
     }
 }
 
@@ -812,4 +1430,11 @@ let bossTimer;
 // 當頁面載入完成時初始化計時器
 document.addEventListener('DOMContentLoaded', () => {
     bossTimer = new BossTimer();
+});
+
+// 頁面關閉時停止同步服務
+window.addEventListener('beforeunload', () => {
+    if (bossTimer) {
+        bossTimer.stopSyncService();
+    }
 });

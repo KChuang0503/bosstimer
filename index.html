@@ -83,18 +83,13 @@
                         <button id="shareBtn" class="btn btn-share">🔗 生成分享連結</button>
                         <button id="importBtn" class="btn btn-import">📥 匯入分享連結</button>
                     </div>
-                    <div class="share-url-container" id="shareUrlContainer" style="display: none;">
-                        <label for="shareUrl">分享連結：</label>
-                        <div class="url-input-group">
-                            <input type="text" id="shareUrl" readonly>
-                            <button id="copyBtn" class="btn btn-copy">複製</button>
+                    <div class="sync-status" id="syncStatus" style="display: none;">
+                        <div class="sync-indicator">
+                            <span class="sync-icon">🔄</span>
+                            <span class="sync-text">同步中...</span>
                         </div>
-                    </div>
-                    <div class="import-container" id="importContainer" style="display: none;">
-                        <label for="importUrl">貼上分享連結：</label>
-                        <div class="url-input-group">
-                            <input type="text" id="importUrl" placeholder="貼上分享連結...">
-                            <button id="loadBtn" class="btn btn-load">載入</button>
+                        <div class="sync-info">
+                            <span id="syncRole">主機</span> | 房間: <span id="roomId">-</span>
                         </div>
                     </div>
                 </div>
@@ -116,6 +111,45 @@
             <div class="active-timers">
                 <h3>進行中的計時器</h3>
                 <div class="timers-list" id="timersList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox 彈出視窗 -->
+    <div id="lightbox" class="lightbox">
+        <div class="lightbox-content">
+            <div class="lightbox-header">
+                <h3 id="lightboxTitle">分享計時器</h3>
+                <button id="closeLightbox" class="btn-close">&times;</button>
+            </div>
+            <div class="lightbox-body">
+                <!-- 分享連結內容 -->
+                <div id="shareContent" class="lightbox-section" style="display: none;">
+                    <label for="shareUrl">分享連結：</label>
+                    <div class="url-input-group">
+                        <input type="text" id="shareUrl" readonly>
+                        <button id="copyBtn" class="btn btn-copy">複製</button>
+                    </div>
+                    <div class="share-info">
+                        <p>將此連結分享給朋友，他們可以載入您的計時器設定</p>
+                    </div>
+                </div>
+                
+                <!-- 匯入連結內容 -->
+                <div id="importContent" class="lightbox-section" style="display: none;">
+                    <label for="importUrl">貼上分享連結：</label>
+                    <div class="url-input-group">
+                        <input type="text" id="importUrl" placeholder="貼上分享連結...">
+                        <button id="pasteBtn" class="btn btn-paste">📋 貼上</button>
+                        <button id="loadBtn" class="btn btn-load">載入</button>
+                    </div>
+                    <div class="import-info">
+                        <p>貼上朋友分享的連結來載入他們的計時器設定，或直接點擊載入從剪貼板讀取</p>
+                    </div>
+                </div>
+            </div>
+            <div class="lightbox-footer">
+                <button id="cancelBtn" class="btn btn-cancel">取消</button>
             </div>
         </div>
     </div>
