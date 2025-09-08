@@ -3,19 +3,52 @@ class BossTimer {
         this.activeTimers = new Map();
         this.timerIdCounter = 0;
         
-        // 同步相關屬性
-        this.syncEnabled = false;
+        // Firebase 相關屬性
+        this.database = null;
+        this.auth = null;
+        this.user = null;
         this.roomId = null;
         this.isHost = false;
-        this.websocket = null;
-        this.syncInterval = null;
+        this.syncEnabled = false;
+        this.roomRef = null;
+        this.timersRef = null;
+        this.usersRef = null;
+        this.connectedUsers = new Map();
         this.lastSyncTime = 0;
-        this.syncStorageKey = 'bosstimer_sync';
-        this.syncCheckInterval = null;
         
         this.initializeElements();
         this.bindEvents();
         this.updateBossOptions();
+        this.initializeFirebase();
+    }
+    
+    // 初始化 Firebase
+    async initializeFirebase() {
+        try {
+            // 獲取 Firebase 服務
+            this.database = firebase.database();
+            this.auth = firebase.auth();
+            
+            // 匿名登入
+            await this.auth.signInAnonymously();
+            this.user = this.auth.currentUser;
+            
+            console.log('Firebase 初始化成功，用戶ID:', this.user.uid);
+            
+            // 監聽認證狀態變化
+            this.auth.onAuthStateChanged((user) => {
+                if (user) {
+                    this.user = user;
+                    console.log('用戶已登入:', user.uid);
+                } else {
+                    console.log('用戶已登出');
+                }
+            });
+            
+        } catch (error) {
+            console.error('Firebase 初始化失敗:', error);
+            this.status.textContent = 'Firebase 初始化失敗，請重新載入頁面';
+        }
     }
     
     initializeElements() {
@@ -193,6 +226,12 @@ class BossTimer {
     
     
     resetAll() {
+        // 停止所有計時器
+        this.activeTimers.forEach(timer => {
+            clearInterval(timer.intervalId);
+        });
+        this.activeTimers.clear();
+        
         // 重置所有輸入到初始狀態
         this.chapterSelect.value = '7';
         this.bossSelect.value = '7-1';
@@ -201,8 +240,24 @@ class BossTimer {
         this.minutesInput.value = '0';
         this.secondsInput.value = '0';
         
+        // 重置音量設定
+        this.volumeSlider.value = '50';
+        this.volumeValue.textContent = '50%';
+        this.volume = 0.5;
+        this.isMuted = false;
+        this.muteBtn.textContent = '🔊';
+        this.muteBtn.classList.remove('muted');
+        
         // 更新地圖選項
         this.updateBossOptions();
+        
+        // 更新計時器列表顯示
+        this.updateTimersList();
+        
+        // 如果啟用同步，同步到 Firebase
+        if (this.syncEnabled) {
+            this.syncTimersToFirebase();
+        }
         
         this.status.textContent = '已重置所有設定';
     }
@@ -259,6 +314,11 @@ class BossTimer {
         
         this.activeTimers.set(timerId, timer);
         this.updateTimersList();
+        
+        // 如果啟用同步，同步到 Firebase
+        if (this.syncEnabled) {
+            this.syncTimersToFirebase();
+        }
         
         this.status.textContent = `已新增 ${bossInfo} 計時器`;
         
@@ -503,15 +563,30 @@ class BossTimer {
             statusText = '已完成';
         }
         
-        // 如果是同步計時器，不顯示控制按鈕
-        const controlsHtml = timer.isSynced ? 
-            '<div class="timer-item-controls"><span class="sync-indicator">🔄 同步中</span></div>' :
-            `<div class="timer-item-controls">
+        // 根據同步狀態和用戶角色顯示不同的控制按鈕
+        let controlsHtml = '';
+        if (timer.isSynced) {
+            // 同步計時器：主機有控制按鈕，客戶端只有同步指示器
+            if (this.isHost) {
+                controlsHtml = `<div class="timer-item-controls">
+                    <button class="btn btn-pause" onclick="bossTimer.pauseSpecificTimer(${timer.id})" ${!timer.isRunning && !timer.isPaused ? 'disabled' : ''}>
+                        ${timer.isRunning ? '暫停' : '繼續'}
+                    </button>
+                    <button class="btn btn-reset" onclick="bossTimer.removeTimer(${timer.id})">移除</button>
+                    <span class="sync-indicator">🔄 同步中</span>
+                </div>`;
+            } else {
+                controlsHtml = '<div class="timer-item-controls"><span class="sync-indicator">🔄 同步中</span></div>';
+            }
+        } else {
+            // 非同步計時器：正常顯示控制按鈕
+            controlsHtml = `<div class="timer-item-controls">
                 <button class="btn btn-pause" onclick="bossTimer.pauseSpecificTimer(${timer.id})" ${!timer.isRunning && !timer.isPaused ? 'disabled' : ''}>
                     ${timer.isRunning ? '暫停' : '繼續'}
                 </button>
                 <button class="btn btn-reset" onclick="bossTimer.removeTimer(${timer.id})">移除</button>
             </div>`;
+        }
         
         div.innerHTML = `
             <div class="timer-item-info">
@@ -550,6 +625,11 @@ class BossTimer {
                 }, 100);
             }
             this.updateTimersList();
+            
+            // 如果啟用同步，同步到 Firebase
+            if (this.syncEnabled) {
+                this.syncTimersToFirebase();
+            }
         }
     }
     
@@ -559,6 +639,11 @@ class BossTimer {
             clearInterval(timer.intervalId);
             this.activeTimers.delete(timerId);
             this.updateTimersList();
+            
+            // 如果啟用同步，同步到 Firebase
+            if (this.syncEnabled) {
+                this.syncTimersToFirebase();
+            }
             
             // 如果移除的是主計時器，重置主顯示
             if (this.activeTimers.size === 0) {
@@ -632,89 +717,40 @@ class BossTimer {
     }
     
     // 分享功能方法
-    showShareLightbox() {
+    async showShareLightbox() {
         if (this.activeTimers.size === 0) {
             this.status.textContent = '請先新增計時器再分享';
             return;
         }
         
         try {
-            // 收集所有計時器的數據
-            const timersData = Array.from(this.activeTimers.values()).map(timer => ({
-                chapter: timer.chapter,
-                boss: timer.boss,
-                server: timer.server,
-                totalSeconds: timer.totalSeconds,
-                remainingSeconds: timer.remainingSeconds,
-                isPaused: timer.isPaused
-            }));
+            // 創建 Firebase 房間
+            const roomId = await this.createOrJoinRoom();
             
-            // 生成簡短的分享連結
-            const compressedData = this.generateShortShareUrl(timersData);
-            
-            // 生成房間ID並啟動同步
-            this.roomId = this.generateRoomId();
-            this.isHost = true;
-            this.startGitHubPagesSync();
+            // 同步現有計時器到 Firebase
+            await this.syncTimersToFirebase();
             
             // 更新lightbox標題
-            this.lightboxTitle.textContent = `分享計時器 (${timersData.length} 個)`;
-            
-            // 在lightbox header中添加停止同步按鈕
-            const stopSyncBtn = document.createElement('button');
-            stopSyncBtn.id = 'stopSyncBtn';
-            stopSyncBtn.className = 'btn-stop-sync';
-            stopSyncBtn.textContent = '停止同步';
-            stopSyncBtn.style.cssText = `
-                margin-left: 10px;
-                background: linear-gradient(135deg, #e53e3e, #c53030);
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-size: 12px;
-                font-weight: 600;
-                cursor: pointer;
-            `;
-            
-            // 將按鈕添加到lightbox header
-            this.lightboxTitle.parentNode.insertBefore(stopSyncBtn, this.lightboxTitle.nextSibling);
-            
-            // 為停止同步按鈕添加事件監聽器
-            stopSyncBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.stopGitHubPagesSync();
-                this.hideLightbox();
-                this.status.textContent = '同步已停止';
-            });
+            this.lightboxTitle.textContent = `分享計時器 (${this.activeTimers.size} 個)`;
             
             // 生成分享連結
             let baseUrl;
             try {
-                // 嘗試獲取完整的URL
                 baseUrl = window.location.origin + window.location.pathname;
-                
-                // 確保URL格式正確
                 if (!baseUrl.startsWith('http')) {
-                    // 如果無法獲取正確的URL，使用相對路徑
-                    baseUrl = window.location.href.split('?')[0]; // 移除現有參數
+                    baseUrl = window.location.href.split('?')[0];
                 }
-                
-                // 確保URL以/結尾（對於GitHub Pages）
                 if (!baseUrl.endsWith('/') && !baseUrl.includes('.')) {
                     baseUrl += '/';
                 }
             } catch (error) {
                 console.error('URL生成錯誤:', error);
-                // 降級方案：使用當前頁面URL
                 baseUrl = window.location.href.split('?')[0];
             }
             
-            const shareUrl = `${baseUrl}?t=${compressedData}&sync=${this.roomId}`;
+            const shareUrl = `${baseUrl}?room=${roomId}`;
             
             // 設定lightbox內容
-            this.lightboxTitle.textContent = `分享計時器 (${timersData.length} 個)`;
             this.shareUrl.value = shareUrl;
             this.shareContent.style.display = 'block';
             this.importContent.style.display = 'none';
@@ -806,57 +842,30 @@ class BossTimer {
     }
     
     // 處理分享連結
-    processShareLink(shareUrl) {
+    async processShareLink(shareUrl) {
         try {
-            // 從URL中提取分享數據
+            // 從URL中提取房間ID
             let url;
             try {
                 url = new URL(shareUrl);
             } catch (error) {
-                // 如果URL解析失敗，嘗試修復
                 if (!shareUrl.startsWith('http')) {
                     shareUrl = window.location.origin + (shareUrl.startsWith('/') ? '' : '/') + shareUrl;
                 }
                 url = new URL(shareUrl);
             }
             
-            let shareData = url.searchParams.get('t') || url.searchParams.get('share');
+            const roomId = url.searchParams.get('room');
             
-            if (!shareData) {
+            if (!roomId) {
                 this.status.textContent = '無效的分享連結';
                 return;
             }
             
-            // 解碼數據（支援新舊格式）
-            let timersData;
-            if (url.searchParams.has('t')) {
-                // 新格式：簡短壓縮格式
-                timersData = this.parseShortShareUrl(shareData);
-            } else {
-                // 舊格式：Base64格式
-                timersData = this.decodeTimersData(shareData);
-            }
+            // 加入 Firebase 房間
+            await this.createOrJoinRoom(roomId);
             
-            if (!timersData || timersData.length === 0) {
-                this.status.textContent = '分享連結中沒有計時器數據';
-                return;
-            }
-            
-            // 清除現有計時器
-            this.clearAllTimers();
-            
-            // 載入分享的計時器
-            let loadedCount = 0;
-            timersData.forEach(timerData => {
-                try {
-                    this.loadSharedTimer(timerData);
-                    loadedCount++;
-                } catch (error) {
-                    console.error('載入計時器失敗:', error);
-                }
-            });
-            
-            this.status.textContent = `成功載入 ${loadedCount} 個計時器`;
+            this.status.textContent = `已加入房間 ${roomId}`;
             this.hideLightbox();
             this.importUrl.value = '';
             
@@ -922,58 +931,50 @@ class BossTimer {
         }
     }
     
-    checkForShareLink() {
+    async checkForShareLink() {
         try {
             const urlParams = new URLSearchParams(window.location.search);
-            const shareData = urlParams.get('t') || urlParams.get('share');
-            const syncRoomId = urlParams.get('sync');
+            const roomId = urlParams.get('room');
             
-            console.log('檢查分享連結:', { shareData, syncRoomId, url: window.location.href });
+            console.log('檢查分享連結:', { roomId, url: window.location.href });
             
-            if (shareData) {
+            if (roomId) {
                 try {
-                    let timersData;
-                    if (urlParams.has('t')) {
-                        // 新格式：簡短壓縮格式
-                        console.log('使用新格式解析分享連結');
-                        timersData = this.parseShortShareUrl(shareData);
-                    } else {
-                        // 舊格式：Base64格式
-                        console.log('使用舊格式解析分享連結');
-                        timersData = this.decodeTimersData(shareData);
-                    }
+                    // 等待 Firebase 初始化完成
+                    await this.waitForFirebaseInit();
                     
-                    console.log('解析結果:', timersData);
+                    // 加入 Firebase 房間
+                    await this.createOrJoinRoom(roomId);
                     
-                    if (timersData && timersData.length > 0) {
-                        // 如果有同步房間ID，加入同步
-                        if (syncRoomId) {
-                            this.roomId = syncRoomId;
-                            this.isHost = false;
-                            this.startGitHubPagesSync();
-                            
-                            // 為客戶端添加中斷同步按鈕
-                            this.addClientStopSyncButton();
-                        }
-                        
-                        // 延遲載入，確保頁面完全載入
-                        setTimeout(() => {
-                            // 客戶端直接使用同步載入方法
-                            this.updateTimersFromSync(timersData);
-                        }, 500);
-                    } else {
-                        console.warn('分享連結中沒有有效的計時器數據');
-                    }
+                    // 為客戶端添加中斷同步按鈕
+                    this.addClientStopSyncButton();
+                    
+                    this.status.textContent = `已自動加入房間 ${roomId}`;
+                    
                 } catch (error) {
-                    console.error('解析分享連結失敗:', error);
-                    this.status.textContent = '分享連結解析失敗，請檢查連結是否正確';
+                    console.error('加入房間失敗:', error);
+                    this.status.textContent = '加入房間失敗，請檢查連結是否正確';
                 }
             } else {
-                console.log('沒有找到分享連結參數');
+                console.log('沒有找到房間參數');
             }
         } catch (error) {
             console.error('檢查分享連結時發生錯誤:', error);
         }
+    }
+    
+    // 等待 Firebase 初始化完成
+    async waitForFirebaseInit() {
+        return new Promise((resolve) => {
+            const checkInit = () => {
+                if (this.database && this.user) {
+                    resolve();
+                } else {
+                    setTimeout(checkInit, 100);
+                }
+            };
+            checkInit();
+        });
     }
     
     loadSharedTimers(timersData) {
@@ -1446,24 +1447,190 @@ class BossTimer {
         return result;
     }
     
-    // 啟動同步服務
-    startSyncService() {
-        if (this.syncEnabled || !this.roomId) return;
+    // 創建或加入房間
+    async createOrJoinRoom(roomId = null) {
+        try {
+            if (!this.user) {
+                throw new Error('用戶未登入');
+            }
+            
+            // 如果沒有提供房間ID，創建新房間
+            if (!roomId) {
+                roomId = this.generateRoomId();
+                this.isHost = true;
+            } else {
+                this.isHost = false;
+            }
+            
+            this.roomId = roomId;
+            this.syncEnabled = true;
+            
+            // 設置 Firebase 引用
+            this.roomRef = this.database.ref(`rooms/${roomId}`);
+            this.timersRef = this.roomRef.child('timers');
+            this.usersRef = this.roomRef.child('users');
+            
+            // 加入房間
+            await this.joinRoom();
+            
+            // 設置監聽器
+            this.setupRoomListeners();
+            
+            // 更新UI
+            this.updateSyncStatus();
+            
+            console.log(`已${this.isHost ? '創建' : '加入'}房間: ${roomId}, 角色: ${this.isHost ? '主機' : '客戶端'}`);
+            
+            return roomId;
+            
+        } catch (error) {
+            console.error('創建/加入房間失敗:', error);
+            this.status.textContent = '創建/加入房間失敗，請重試';
+            throw error;
+        }
+    }
+    
+    // 加入房間
+    async joinRoom() {
+        const userData = {
+            uid: this.user.uid,
+            name: `用戶${this.user.uid.slice(-4)}`,
+            joinedAt: firebase.database.ServerValue.TIMESTAMP,
+            isHost: this.isHost,
+            lastSeen: firebase.database.ServerValue.TIMESTAMP
+        };
         
-        this.syncEnabled = true;
+        // 添加用戶到房間
+        await this.usersRef.child(this.user.uid).set(userData);
         
-        // 顯示同步狀態指示器
-        this.updateSyncStatus();
+        // 設置用戶在線狀態
+        const userOnlineRef = this.usersRef.child(`${this.user.uid}/online`);
+        userOnlineRef.set(true);
         
-        // 使用WebSocket進行實時同步
-        this.connectWebSocket();
+        // 設置斷線處理
+        userOnlineRef.onDisconnect().set(false);
         
-        // 定期同步（備用方案）
-        this.syncInterval = setInterval(() => {
-            this.syncTimers();
-        }, 5000); // 每5秒同步一次
+        // 定期更新 lastSeen
+        setInterval(() => {
+            this.usersRef.child(`${this.user.uid}/lastSeen`).set(firebase.database.ServerValue.TIMESTAMP);
+        }, 30000); // 每30秒更新一次
+    }
+    
+    // 設置房間監聽器
+    setupRoomListeners() {
+        // 監聽計時器變化
+        this.timersRef.on('value', (snapshot) => {
+            this.handleTimersUpdate(snapshot.val());
+        });
         
-        console.log(`同步服務已啟動 - 房間: ${this.roomId}, 角色: ${this.isHost ? '主機' : '客戶端'}`);
+        // 監聽用戶變化
+        this.usersRef.on('value', (snapshot) => {
+            this.handleUsersUpdate(snapshot.val());
+        });
+        
+        // 監聽房間狀態
+        this.roomRef.child('status').on('value', (snapshot) => {
+            this.handleRoomStatusUpdate(snapshot.val());
+        });
+    }
+    
+    // 處理計時器更新
+    handleTimersUpdate(timersData) {
+        if (!timersData) return;
+        
+        console.log('收到計時器更新:', timersData);
+        
+        // 清除現有計時器
+        this.clearAllTimers();
+        
+        // 載入新的計時器數據
+        Object.values(timersData).forEach(timerData => {
+            try {
+                this.loadSharedTimerFromSync(timerData);
+            } catch (error) {
+                console.error('載入同步計時器失敗:', error);
+            }
+        });
+        
+        this.updateTimersList();
+        this.status.textContent = `已同步 ${Object.keys(timersData).length} 個計時器`;
+    }
+    
+    // 處理用戶更新
+    handleUsersUpdate(usersData) {
+        if (!usersData) return;
+        
+        this.connectedUsers.clear();
+        Object.values(usersData).forEach(user => {
+            if (user.online) {
+                this.connectedUsers.set(user.uid, user);
+            }
+        });
+        
+        console.log(`房間內在線用戶: ${this.connectedUsers.size} 人`);
+        this.updateUserCount();
+    }
+    
+    // 處理房間狀態更新
+    handleRoomStatusUpdate(status) {
+        if (status) {
+            console.log('房間狀態:', status);
+            
+            // 如果是主機發出的停止同步指令
+            if (status.action === 'stop_sync' && !this.isHost) {
+                console.log('收到主機停止同步指令');
+                this.stopFirebaseSync();
+                this.status.textContent = '主機已停止同步，同步已中斷';
+            }
+        }
+    }
+    
+    // 更新用戶數量顯示
+    updateUserCount() {
+        const userCount = this.connectedUsers.size;
+        if (this.syncStatus) {
+            const userCountElement = this.syncStatus.querySelector('.user-count');
+            if (userCountElement) {
+                userCountElement.textContent = `在線用戶: ${userCount} 人`;
+            }
+        }
+    }
+    
+    // 同步計時器到 Firebase
+    async syncTimersToFirebase() {
+        if (!this.syncEnabled || !this.timersRef) return;
+        
+        try {
+            const timersData = {};
+            
+            this.activeTimers.forEach((timer, timerId) => {
+                // 只同步非同步計時器（避免循環同步）
+                if (!timer.isSynced) {
+                    timersData[timerId] = {
+                        id: timerId,
+                        chapter: timer.chapter,
+                        boss: timer.boss,
+                        server: timer.server,
+                        totalSeconds: timer.totalSeconds,
+                        remainingSeconds: timer.remainingSeconds,
+                        isPaused: timer.isPaused,
+                        startTime: timer.startTime,
+                        pausedTime: timer.pausedTime,
+                        lastUpdate: Date.now(),
+                        syncedBy: this.user.uid
+                    };
+                }
+            });
+            
+            if (Object.keys(timersData).length > 0) {
+                // 使用 update 而不是 set，避免覆蓋現有計時器
+                await this.timersRef.update(timersData);
+                console.log('已同步計時器到 Firebase');
+            }
+            
+        } catch (error) {
+            console.error('同步計時器到 Firebase 失敗:', error);
+        }
     }
     
     // 更新同步狀態顯示
@@ -1472,6 +1639,52 @@ class BossTimer {
             this.syncStatus.style.display = 'block';
             this.syncRole.textContent = this.isHost ? '主機' : '客戶端';
             this.roomIdElement.textContent = this.roomId;
+            
+            // 添加用戶數量顯示
+            if (!this.syncStatus.querySelector('.user-count')) {
+                const userCountElement = document.createElement('div');
+                userCountElement.className = 'user-count';
+                userCountElement.style.cssText = 'font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.9;';
+                this.syncStatus.appendChild(userCountElement);
+            }
+            
+            // 只為主機添加停止同步按鈕
+            if (this.isHost && !this.syncStatus.querySelector('.stop-sync-btn')) {
+                const stopSyncBtn = document.createElement('button');
+                stopSyncBtn.className = 'stop-sync-btn';
+                stopSyncBtn.textContent = '停止同步';
+                stopSyncBtn.style.cssText = `
+                    margin-top: 10px;
+                    background: linear-gradient(135deg, #e53e3e, #c53030);
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                `;
+                
+                stopSyncBtn.addEventListener('click', () => {
+                    this.stopFirebaseSync();
+                    this.status.textContent = '同步已停止';
+                });
+                
+                stopSyncBtn.addEventListener('mouseenter', () => {
+                    stopSyncBtn.style.transform = 'translateY(-1px)';
+                    stopSyncBtn.style.boxShadow = '0 4px 12px rgba(229, 62, 62, 0.4)';
+                });
+                
+                stopSyncBtn.addEventListener('mouseleave', () => {
+                    stopSyncBtn.style.transform = 'translateY(0)';
+                    stopSyncBtn.style.boxShadow = 'none';
+                });
+                
+                this.syncStatus.appendChild(stopSyncBtn);
+            }
+            
+            this.updateUserCount();
         } else {
             this.syncStatus.style.display = 'none';
         }
@@ -1578,27 +1791,63 @@ class BossTimer {
         this.status.textContent = `已同步 ${timersData.length} 個計時器`;
     }
     
-    // 停止同步服務
+    // 停止 Firebase 同步
+    async stopFirebaseSync() {
+        try {
+            this.syncEnabled = false;
+            
+            // 如果是主機，通知所有客戶端停止同步
+            if (this.isHost && this.roomRef) {
+                await this.roomRef.child('status').set({
+                    action: 'stop_sync',
+                    timestamp: firebase.database.ServerValue.TIMESTAMP,
+                    hostId: this.user.uid
+                });
+            }
+            
+            // 移除 Firebase 監聽器
+            if (this.timersRef) {
+                this.timersRef.off();
+            }
+            if (this.usersRef) {
+                this.usersRef.off();
+            }
+            if (this.roomRef) {
+                this.roomRef.off();
+            }
+            
+            // 從房間中移除用戶
+            if (this.usersRef && this.user) {
+                await this.usersRef.child(this.user.uid).remove();
+            }
+            
+            // 清除引用
+            this.roomRef = null;
+            this.timersRef = null;
+            this.usersRef = null;
+            this.roomId = null;
+            this.isHost = false;
+            this.connectedUsers.clear();
+            
+            // 移除客戶端中斷同步按鈕
+            const clientStopBtn = document.getElementById('clientStopSyncBtn');
+            if (clientStopBtn) {
+                clientStopBtn.remove();
+            }
+            
+            // 隱藏同步狀態指示器
+            this.updateSyncStatus();
+            
+            console.log('Firebase 同步已停止');
+            
+        } catch (error) {
+            console.error('停止 Firebase 同步失敗:', error);
+        }
+    }
+    
+    // 停止同步服務（向後兼容）
     stopSyncService() {
-        this.syncEnabled = false;
-        
-        if (this.websocket) {
-            this.websocket.close();
-            this.websocket = null;
-        }
-        
-        if (this.syncInterval) {
-            clearInterval(this.syncInterval);
-            this.syncInterval = null;
-        }
-        
-        this.roomId = null;
-        this.isHost = false;
-        
-        // 隱藏同步狀態指示器
-        this.updateSyncStatus();
-        
-        console.log('同步服務已停止');
+        this.stopFirebaseSync();
     }
     
     // 啟動基於GitHub Pages的同步系統
@@ -1748,6 +1997,12 @@ class BossTimer {
     
     // 為客戶端添加中斷同步按鈕
     addClientStopSyncButton() {
+        // 移除已存在的客戶端停止同步按鈕
+        const existingClientBtn = document.getElementById('clientStopSyncBtn');
+        if (existingClientBtn) {
+            existingClientBtn.remove();
+        }
+        
         // 創建中斷同步按鈕
         const stopSyncBtn = document.createElement('button');
         stopSyncBtn.id = 'clientStopSyncBtn';
@@ -1771,7 +2026,7 @@ class BossTimer {
         `;
         
         stopSyncBtn.addEventListener('click', () => {
-            this.stopGitHubPagesSync();
+            this.stopFirebaseSync();
             stopSyncBtn.remove();
             this.status.textContent = '同步已中斷，恢復到初始狀態';
             
@@ -1817,7 +2072,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // 頁面關閉時停止同步服務
 window.addEventListener('beforeunload', () => {
     if (bossTimer) {
-        bossTimer.stopSyncService();
-        bossTimer.stopGitHubPagesSync();
+        bossTimer.stopFirebaseSync();
     }
 });

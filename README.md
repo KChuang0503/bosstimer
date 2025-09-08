@@ -1,6 +1,6 @@
 # 救世主之樹M Boss 重生計時器
 
-一個專為救世主之樹M設計的 Boss 重生時間追蹤工具，支援多個計時器同時運行，並提供音效提醒和瀏覽器通知功能。
+一個專為救世主之樹M設計的 Boss 重生時間追蹤工具，支援多個計時器同時運行，並提供音效提醒、瀏覽器通知功能和**全球實時同步**。
 
 ## 功能特色
 
@@ -23,6 +23,14 @@
 - **重複檢查**：防止新增相同章節、地圖、分流的計時器
 - **自動滾動**：重複警告時自動滾動到已存在的計時器
 - **鍵盤快捷鍵**：支援 ESC 鍵快速重置
+
+### 🌍 全球同步功能
+- **實時同步**：多個用戶同時查看相同的計時器
+- **房間分享**：生成分享連結，朋友點擊即可加入
+- **即時更新**：任何操作都會即時同步給所有用戶
+- **用戶狀態**：顯示房間內在線用戶數量
+- **自動重連**：網絡中斷時自動重新連接
+- **匿名登入**：無需註冊，自動分配用戶ID
 
 ## 支援的地圖
 
@@ -71,6 +79,13 @@
 - **重複檢測**：系統會自動檢測並阻止新增重複的計時器
 - **智能提醒**：重複時會高亮顯示已存在的計時器並自動滾動到可見位置
 
+### 同步功能使用
+1. **創建房間**：添加計時器後點擊「🔗 生成分享連結」
+2. **分享連結**：複製生成的連結分享給朋友
+3. **加入房間**：朋友點擊連結自動加入並同步計時器
+4. **實時同步**：所有操作都會即時同步給房間內所有用戶
+5. **停止同步**：點擊「停止同步」按鈕退出房間
+
 ### 快捷鍵
 - `ESC`：重置所有設定
 
@@ -81,6 +96,7 @@
 - **CSS3**：現代化樣式設計，支援響應式布局
 - **JavaScript ES6+**：原生 JavaScript，無外部依賴
 - **Web APIs**：使用 Notification API 和 Web Audio API
+- **Firebase**：Realtime Database 和 Authentication 服務
 
 ### 瀏覽器支援
 - Chrome 60+
@@ -101,14 +117,39 @@
 ### 專案結構
 ```
 bosstimer/
-├── index.html          # 主頁面
-├── script.js           # JavaScript 邏輯
-├── style.css           # 樣式表
-├── README.md           # 專案說明
-├── LICENSE             # 授權條款
-├── .gitignore          # Git 忽略檔案
-└── CONTRIBUTING.md     # 貢獻指南
+├── index.html              # 主頁面
+├── script.js               # JavaScript 邏輯
+├── style.css               # 樣式表
+├── firebase-config.js      # Firebase 配置（不包含在 Git 中）
+├── firebase-config.example.js # Firebase 配置示例
+├── README.md               # 專案說明
+├── LICENSE                 # 授權條款
+├── FIREBASE_SETUP.md       # Firebase 設置說明
+├── SETUP.md                # 部署設置說明
+├── DEMO.md                 # 功能演示說明
+├── .gitignore              # Git 忽略檔案
+└── test.html               # 測試頁面
 ```
+
+### 快速開始
+
+1. **克隆專案**
+   ```bash
+   git clone https://github.com/yourusername/bosstimer.git
+   cd bosstimer
+   ```
+
+2. **設置 Firebase 配置**
+   ```bash
+   cp firebase-config.example.js firebase-config.js
+   # 編輯 firebase-config.js 填入您的 Firebase 配置
+   ```
+
+3. **開啟應用程式**
+   - 直接開啟 `index.html` 或使用本地服務器
+   - 按照 `FIREBASE_SETUP.md` 設置 Firebase 服務
+
+詳細設置說明請參考 [SETUP.md](SETUP.md)
 
 ### 核心類別
 - `BossTimer`：主要計時器管理類別
@@ -120,6 +161,15 @@ bosstimer/
 本專案採用 MIT 授權條款。詳見 [LICENSE](LICENSE) 檔案。
 
 ## 更新日誌
+
+### v2.0.0 - 全球同步版本
+- **🌍 全球同步功能**：使用 Firebase Realtime Database 實現多用戶實時同步
+- **🔗 房間分享**：生成分享連結，朋友點擊即可加入房間
+- **👥 用戶狀態**：顯示房間內在線用戶數量和同步狀態
+- **⚡ 即時更新**：所有操作都會即時同步給房間內所有用戶
+- **🔐 匿名認證**：無需註冊，自動分配用戶ID
+- **🔄 自動重連**：網絡中斷時自動重新連接
+- **📱 移動支援**：完美支援手機和平板設備
 
 ### v1.1.0
 - **重複檢查功能**：防止新增相同章節、地圖、分流的計時器
