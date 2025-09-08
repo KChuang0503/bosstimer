@@ -503,6 +503,16 @@ class BossTimer {
             statusText = '已完成';
         }
         
+        // 如果是同步計時器，不顯示控制按鈕
+        const controlsHtml = timer.isSynced ? 
+            '<div class="timer-item-controls"><span class="sync-indicator">🔄 同步中</span></div>' :
+            `<div class="timer-item-controls">
+                <button class="btn btn-pause" onclick="bossTimer.pauseSpecificTimer(${timer.id})" ${!timer.isRunning && !timer.isPaused ? 'disabled' : ''}>
+                    ${timer.isRunning ? '暫停' : '繼續'}
+                </button>
+                <button class="btn btn-reset" onclick="bossTimer.removeTimer(${timer.id})">移除</button>
+            </div>`;
+        
         div.innerHTML = `
             <div class="timer-item-info">
                 <div class="timer-item-boss">${timer.bossInfo}</div>
@@ -514,12 +524,7 @@ class BossTimer {
                     </div>
                 </div>
             </div>
-            <div class="timer-item-controls">
-                <button class="btn btn-pause" onclick="bossTimer.pauseSpecificTimer(${timer.id})" ${!timer.isRunning && !timer.isPaused ? 'disabled' : ''}>
-                    ${timer.isRunning ? '暫停' : '繼續'}
-                </button>
-                <button class="btn btn-reset" onclick="bossTimer.removeTimer(${timer.id})">移除</button>
-            </div>
+            ${controlsHtml}
         `;
         
         return div;
@@ -651,6 +656,21 @@ class BossTimer {
             this.roomId = this.generateRoomId();
             this.isHost = true;
             this.startGitHubPagesSync();
+            
+            // 更新lightbox標題以包含中斷選項
+            this.lightboxTitle.innerHTML = `分享計時器 (${timersData.length} 個) <button id="stopSyncBtn" class="btn-stop-sync">停止同步</button>`;
+            
+            // 為停止同步按鈕添加事件監聽器
+            setTimeout(() => {
+                const stopSyncBtn = document.getElementById('stopSyncBtn');
+                if (stopSyncBtn) {
+                    stopSyncBtn.addEventListener('click', () => {
+                        this.stopGitHubPagesSync();
+                        this.hideLightbox();
+                        this.status.textContent = '同步已停止';
+                    });
+                }
+            }, 100);
             
             // 生成分享連結
             let baseUrl;
@@ -914,6 +934,9 @@ class BossTimer {
                             this.roomId = syncRoomId;
                             this.isHost = false;
                             this.startGitHubPagesSync();
+                            
+                            // 為客戶端添加中斷同步按鈕
+                            this.addClientStopSyncButton();
                         }
                         
                         // 延遲載入，確保頁面完全載入
@@ -997,7 +1020,8 @@ class BossTimer {
             lastUpdateTime: Date.now(),
             chapter: timerData.chapter,
             boss: timerData.boss,
-            server: timerData.server
+            server: timerData.server,
+            isSynced: true // 標記為同步計時器
         };
         
         if (timer.isRunning) {
@@ -1580,9 +1604,14 @@ class BossTimer {
         if (!this.syncEnabled || !this.isHost) return;
         
         try {
+            // 只同步非同步計時器（避免重複同步）
+            const nonSyncedTimers = Array.from(this.activeTimers.values()).filter(timer => !timer.isSynced);
+            
+            if (nonSyncedTimers.length === 0) return;
+            
             const syncData = {
                 roomId: this.roomId,
-                timers: Array.from(this.activeTimers.values()).map(timer => ({
+                timers: nonSyncedTimers.map(timer => ({
                     id: timer.id,
                     chapter: timer.chapter,
                     boss: timer.boss,
@@ -1601,7 +1630,9 @@ class BossTimer {
             localStorage.setItem(`${this.syncStorageKey}_${this.roomId}`, JSON.stringify(syncData));
             
             // 更新狀態
-            this.status.textContent = `同步中... (${this.activeTimers.size} 個計時器)`;
+            this.status.textContent = `同步中... (${nonSyncedTimers.length} 個計時器)`;
+            
+            console.log(`主機同步數據: ${nonSyncedTimers.length} 個計時器`);
             
         } catch (error) {
             console.error('更新同步數據失敗:', error);
@@ -1636,19 +1667,24 @@ class BossTimer {
     updateTimersFromSync(timersData) {
         if (!timersData || timersData.length === 0) return;
         
+        console.log('開始同步計時器:', timersData);
+        
         // 清除現有計時器
         this.clearAllTimers();
         
         // 載入同步的計時器
+        let loadedCount = 0;
         timersData.forEach(timerData => {
             try {
                 this.loadSharedTimerFromSync(timerData);
+                loadedCount++;
             } catch (error) {
-                console.error('載入同步計時器失敗:', error);
+                console.error('載入同步計時器失敗:', error, timerData);
             }
         });
         
-        this.status.textContent = `已同步 ${timersData.length} 個計時器`;
+        console.log(`同步完成: 載入 ${loadedCount}/${timersData.length} 個計時器`);
+        this.status.textContent = `已同步 ${loadedCount} 個計時器`;
     }
     
     // 停止GitHub Pages同步
@@ -1675,6 +1711,52 @@ class BossTimer {
         this.updateSyncStatus();
         
         console.log('GitHub Pages同步已停止');
+    }
+    
+    // 為客戶端添加中斷同步按鈕
+    addClientStopSyncButton() {
+        // 創建中斷同步按鈕
+        const stopSyncBtn = document.createElement('button');
+        stopSyncBtn.id = 'clientStopSyncBtn';
+        stopSyncBtn.className = 'btn btn-stop-sync';
+        stopSyncBtn.textContent = '中斷同步';
+        stopSyncBtn.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: linear-gradient(135deg, #e53e3e, #c53030);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(229, 62, 62, 0.3);
+            transition: all 0.3s ease;
+        `;
+        
+        stopSyncBtn.addEventListener('click', () => {
+            this.stopGitHubPagesSync();
+            stopSyncBtn.remove();
+            this.status.textContent = '同步已中斷，恢復到初始狀態';
+            
+            // 清除所有計時器
+            this.clearAllTimers();
+        });
+        
+        stopSyncBtn.addEventListener('mouseenter', () => {
+            stopSyncBtn.style.transform = 'translateY(-2px)';
+            stopSyncBtn.style.boxShadow = '0 6px 16px rgba(229, 62, 62, 0.4)';
+        });
+        
+        stopSyncBtn.addEventListener('mouseleave', () => {
+            stopSyncBtn.style.transform = 'translateY(0)';
+            stopSyncBtn.style.boxShadow = '0 4px 12px rgba(229, 62, 62, 0.3)';
+        });
+        
+        document.body.appendChild(stopSyncBtn);
     }
     
     // 添加調試信息

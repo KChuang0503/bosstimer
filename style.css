@@ -672,6 +672,36 @@ h3 {
     opacity: 0.9;
 }
 
+/* 停止同步按鈕樣式 */
+.btn-stop-sync {
+    background: linear-gradient(135deg, #e53e3e, #c53030) !important;
+    color: white !important;
+    border: none !important;
+    padding: 8px 16px !important;
+    border-radius: 6px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    margin-left: 10px !important;
+    box-shadow: 0 2px 8px rgba(229, 62, 62, 0.3) !important;
+    transition: all 0.3s ease !important;
+}
+
+.btn-stop-sync:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(229, 62, 62, 0.4) !important;
+}
+
+/* 同步計時器指示器 */
+.timer-item-controls .sync-indicator {
+    color: #667eea;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
