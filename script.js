@@ -10,6 +10,8 @@ class BossTimer {
         this.websocket = null;
         this.syncInterval = null;
         this.lastSyncTime = 0;
+        this.syncStorageKey = 'bosstimer_sync';
+        this.syncCheckInterval = null;
         
         this.initializeElements();
         this.bindEvents();
@@ -645,6 +647,11 @@ class BossTimer {
             // 生成簡短的分享連結
             const compressedData = this.generateShortShareUrl(timersData);
             
+            // 生成房間ID並啟動同步
+            this.roomId = this.generateRoomId();
+            this.isHost = true;
+            this.startGitHubPagesSync();
+            
             // 生成分享連結
             let baseUrl;
             try {
@@ -667,7 +674,7 @@ class BossTimer {
                 baseUrl = window.location.href.split('?')[0];
             }
             
-            const shareUrl = `${baseUrl}?t=${compressedData}`;
+            const shareUrl = `${baseUrl}?t=${compressedData}&sync=${this.roomId}`;
             
             // 設定lightbox內容
             this.lightboxTitle.textContent = `分享計時器 (${timersData.length} 個)`;
@@ -882,8 +889,9 @@ class BossTimer {
         try {
             const urlParams = new URLSearchParams(window.location.search);
             const shareData = urlParams.get('t') || urlParams.get('share');
+            const syncRoomId = urlParams.get('sync');
             
-            console.log('檢查分享連結:', { shareData, url: window.location.href });
+            console.log('檢查分享連結:', { shareData, syncRoomId, url: window.location.href });
             
             if (shareData) {
                 try {
@@ -901,6 +909,13 @@ class BossTimer {
                     console.log('解析結果:', timersData);
                     
                     if (timersData && timersData.length > 0) {
+                        // 如果有同步房間ID，加入同步
+                        if (syncRoomId) {
+                            this.roomId = syncRoomId;
+                            this.isHost = false;
+                            this.startGitHubPagesSync();
+                        }
+                        
                         // 延遲載入，確保頁面完全載入
                         setTimeout(() => {
                             this.loadSharedTimers(timersData);
@@ -963,6 +978,73 @@ class BossTimer {
                 this.pauseSpecificTimer(lastTimer.id);
             }
         }
+    }
+    
+    // 從同步數據載入計時器（用於實時同步）
+    loadSharedTimerFromSync(timerData) {
+        const timerId = this.timerIdCounter++;
+        
+        const timer = {
+            id: timerId,
+            bossInfo: `${this.getChapterName(timerData.chapter)} - ${this.getBossName(timerData.boss)} (分流 ${timerData.server})`,
+            totalSeconds: timerData.totalSeconds,
+            remainingSeconds: timerData.remainingSeconds,
+            isRunning: !timerData.isPaused,
+            isPaused: timerData.isPaused,
+            intervalId: null,
+            startTime: timerData.startTime || Date.now(),
+            pausedTime: timerData.pausedTime || 0,
+            lastUpdateTime: Date.now(),
+            chapter: timerData.chapter,
+            boss: timerData.boss,
+            server: timerData.server
+        };
+        
+        if (timer.isRunning) {
+            timer.intervalId = setInterval(() => {
+                this.tickTimer(timer);
+            }, 100);
+        }
+        
+        this.activeTimers.set(timerId, timer);
+        this.updateTimersList();
+    }
+    
+    // 獲取章節名稱
+    getChapterName(chapter) {
+        const chapterNames = {
+            '7': '第七章',
+            '8': '第八章', 
+            '9': '第九章',
+            '10': '第十章'
+        };
+        return chapterNames[chapter] || `第${chapter}章`;
+    }
+    
+    // 獲取Boss名稱
+    getBossName(boss) {
+        const bossNames = {
+            '7-1': '扎卡里耶爾交叉路',
+            '7-2': '王陵一層',
+            '7-3': '王陵二層',
+            '7-4': '王陵三層',
+            '8-1': '水路橋地區',
+            '8-2': '阿雷魯諾男爵領',
+            '8-3': '魔族收監所第一區',
+            '8-4': '魔族收監所第三區',
+            '8-5': '魔族收監所第四區',
+            '8-6': '魔族收監所第五區',
+            '9-1': '女神的古院',
+            '9-2': '佩迪米安外城',
+            '9-3': '魔法師之塔一層',
+            '9-4': '魔法師之塔二層',
+            '9-5': '魔法師之塔三層',
+            '10-1': '大教堂懺悔路',
+            '10-2': '大教堂正殿',
+            '10-3': '大教堂大迴廊',
+            '10-4': '大教堂至聖所'
+        };
+        return bossNames[boss] || boss;
     }
     
     clearAllTimers() {
@@ -1471,6 +1553,130 @@ class BossTimer {
         console.log('同步服務已停止');
     }
     
+    // 啟動基於GitHub Pages的同步系統
+    startGitHubPagesSync() {
+        if (this.syncEnabled || !this.roomId) return;
+        
+        this.syncEnabled = true;
+        this.updateSyncStatus();
+        
+        console.log(`啟動GitHub Pages同步 - 房間: ${this.roomId}, 角色: ${this.isHost ? '主機' : '客戶端'}`);
+        
+        if (this.isHost) {
+            // 主機：定期更新同步數據
+            this.syncInterval = setInterval(() => {
+                this.updateSyncData();
+            }, 1000); // 每秒更新一次
+        } else {
+            // 客戶端：定期檢查同步數據
+            this.syncCheckInterval = setInterval(() => {
+                this.checkSyncData();
+            }, 2000); // 每2秒檢查一次
+        }
+    }
+    
+    // 更新同步數據（主機）
+    updateSyncData() {
+        if (!this.syncEnabled || !this.isHost) return;
+        
+        try {
+            const syncData = {
+                roomId: this.roomId,
+                timers: Array.from(this.activeTimers.values()).map(timer => ({
+                    id: timer.id,
+                    chapter: timer.chapter,
+                    boss: timer.boss,
+                    server: timer.server,
+                    totalSeconds: timer.totalSeconds,
+                    remainingSeconds: timer.remainingSeconds,
+                    isPaused: timer.isPaused,
+                    startTime: timer.startTime,
+                    pausedTime: timer.pausedTime,
+                    lastUpdate: Date.now()
+                })),
+                timestamp: Date.now()
+            };
+            
+            // 存儲到localStorage
+            localStorage.setItem(`${this.syncStorageKey}_${this.roomId}`, JSON.stringify(syncData));
+            
+            // 更新狀態
+            this.status.textContent = `同步中... (${this.activeTimers.size} 個計時器)`;
+            
+        } catch (error) {
+            console.error('更新同步數據失敗:', error);
+        }
+    }
+    
+    // 檢查同步數據（客戶端）
+    checkSyncData() {
+        if (!this.syncEnabled || this.isHost) return;
+        
+        try {
+            const syncDataStr = localStorage.getItem(`${this.syncStorageKey}_${this.roomId}`);
+            if (!syncDataStr) return;
+            
+            const syncData = JSON.parse(syncDataStr);
+            
+            // 檢查數據是否過期（超過10秒）
+            if (Date.now() - syncData.timestamp > 10000) {
+                console.log('同步數據已過期');
+                return;
+            }
+            
+            // 更新計時器
+            this.updateTimersFromSync(syncData.timers);
+            
+        } catch (error) {
+            console.error('檢查同步數據失敗:', error);
+        }
+    }
+    
+    // 從同步數據更新計時器
+    updateTimersFromSync(timersData) {
+        if (!timersData || timersData.length === 0) return;
+        
+        // 清除現有計時器
+        this.clearAllTimers();
+        
+        // 載入同步的計時器
+        timersData.forEach(timerData => {
+            try {
+                this.loadSharedTimerFromSync(timerData);
+            } catch (error) {
+                console.error('載入同步計時器失敗:', error);
+            }
+        });
+        
+        this.status.textContent = `已同步 ${timersData.length} 個計時器`;
+    }
+    
+    // 停止GitHub Pages同步
+    stopGitHubPagesSync() {
+        this.syncEnabled = false;
+        
+        if (this.syncInterval) {
+            clearInterval(this.syncInterval);
+            this.syncInterval = null;
+        }
+        
+        if (this.syncCheckInterval) {
+            clearInterval(this.syncCheckInterval);
+            this.syncCheckInterval = null;
+        }
+        
+        // 清除同步數據
+        if (this.roomId) {
+            localStorage.removeItem(`${this.syncStorageKey}_${this.roomId}`);
+        }
+        
+        this.roomId = null;
+        this.isHost = false;
+        this.updateSyncStatus();
+        
+        console.log('GitHub Pages同步已停止');
+    }
+    
     // 添加調試信息
     addDebugInfo() {
         console.log('=== Boss Timer 調試信息 ===');
@@ -1497,5 +1703,6 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('beforeunload', () => {
     if (bossTimer) {
         bossTimer.stopSyncService();
+        bossTimer.stopGitHubPagesSync();
     }
 });
