@@ -161,19 +161,70 @@
     </div>
 
     <!-- Firebase 配置 -->
-    <script src="firebase-config.js"></script>
     <script>
-        // 檢查是否載入了 Firebase 配置
-        if (typeof window.firebaseConfig === 'undefined') {
-            console.error('Firebase 配置文件未找到！請確保 firebase-config.js 文件存在。');
-            document.body.innerHTML = '<div style="text-align: center; padding: 50px; color: red;"><h1>配置錯誤</h1><p>請先設置 Firebase 配置文件</p><p>複製 firebase-config.example.js 為 firebase-config.js 並填入您的配置</p></div>';
-        } else {
-            // 初始化 Firebase
-            firebase.initializeApp(window.firebaseConfig);
-            
-            // 獲取 Firebase 服務
-            const database = firebase.database();
-            const auth = firebase.auth();
+        // 嘗試載入 Firebase 配置
+        let firebaseConfigLoaded = false;
+        
+        // 創建 script 標籤來載入配置
+        const configScript = document.createElement('script');
+        configScript.src = 'firebase-config.js';
+        configScript.onload = function() {
+            console.log('Firebase 配置文件載入成功');
+            firebaseConfigLoaded = true;
+            initializeFirebase();
+        };
+        configScript.onerror = function() {
+            console.error('Firebase 配置文件載入失敗');
+            showConfigError();
+        };
+        document.head.appendChild(configScript);
+        
+        // 設置超時檢查
+        setTimeout(function() {
+            if (!firebaseConfigLoaded) {
+                console.error('Firebase 配置文件載入超時');
+                showConfigError();
+            }
+        }, 3000);
+        
+        function showConfigError() {
+            document.body.innerHTML = `
+                <div style="text-align: center; padding: 50px; color: red; font-family: Arial, sans-serif;">
+                    <h1>🔧 配置錯誤</h1>
+                    <p>Firebase 配置文件未找到或載入失敗</p>
+                    <div style="background: #f5f5f5; padding: 20px; margin: 20px; border-radius: 8px; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto;">
+                        <h3>解決步驟：</h3>
+                        <ol>
+                            <li>確保 <code>firebase-config.js</code> 文件存在於項目根目錄</li>
+                            <li>如果文件不存在，請複製 <code>firebase-config.example.js</code> 為 <code>firebase-config.js</code></li>
+                            <li>編輯 <code>firebase-config.js</code> 並填入您的 Firebase 配置</li>
+                            <li>重新載入頁面</li>
+                        </ol>
+                        <p><strong>注意：</strong>請確保使用本地服務器運行此應用程式，而不是直接開啟 HTML 文件</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function initializeFirebase() {
+            if (typeof window.firebaseConfig !== 'undefined') {
+                try {
+                    // 初始化 Firebase
+                    firebase.initializeApp(window.firebaseConfig);
+                    
+                    // 獲取 Firebase 服務
+                    const database = firebase.database();
+                    const auth = firebase.auth();
+                    
+                    console.log('Firebase 初始化成功');
+                } catch (error) {
+                    console.error('Firebase 初始化失敗:', error);
+                    showConfigError();
+                }
+            } else {
+                console.error('window.firebaseConfig 未定義');
+                showConfigError();
+            }
         }
     </script>
     

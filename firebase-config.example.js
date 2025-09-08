@@ -2,14 +2,14 @@
 // 複製此文件為 firebase-config.js 並填入您的 Firebase 配置
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBgSuT9wfBRUQKJf7ZhEDdhFDwURUHZzq8",
-    authDomain: "bosstimer-aa8d5.firebaseapp.com",
-    databaseURL: "https://bosstimer-aa8d5-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "bosstimer-aa8d5",
-    storageBucket: "bosstimer-aa8d5.firebasestorage.app",
-    messagingSenderId: "625660512723",
-    appId: "1:625660512723:web:ef61712fb4cd9ef37c4726",
-    measurementId: "G-QE2F8PTSBQ"
+    apiKey: "YOUR_API_KEY_HERE",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID",
+    measurementId: "YOUR_MEASUREMENT_ID"
 };
 
 // 導出配置
