@@ -1,199 +1,162 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Boss 重生計時器</title>
+
+    <!-- Boxicons -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link href='https://unpkg.com/boxicons@2.1.4/dist/boxicons.js' rel='stylesheet'>
+
+    <!-- My CSS -->
     <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&display=swap" rel="stylesheet">
-    
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    
+
+    <title>王重生時間記錄器</title>
 </head>
 
 <body>
-    <div class="container">
-        <h1>Boss 重生計時器</h1>
+    <!-- CONTENT -->
+    <section id="content">
+        <!-- MAIN -->
+        <main>
+            <div class="head-title">
+                <h1>王重生時間記錄器</h1>
+            </div>
 
-        <div class="main-layout">
-            <!-- 左側：Boss 計時器控制面板 -->
-            <div class="timer-panel">
-                <div class="boss-selector">
-                    <div class="chapter-selector">
-                        <label for="chapter">選擇章節：</label>
-                        <select id="chapter">
-                            <option value="7">第七章</option>
-                            <option value="8">第八章</option>
-                            <option value="9">第九章</option>
-                            <option value="10">第十章</option>
-                        </select>
-                    </div>
 
-                    <div class="boss-selector">
-                        <label for="boss">選擇地圖：</label>
-                        <select id="boss">
-                            <option value="7-1">扎卡里耶爾交叉路</option>
-                            <option value="7-2">王陵一層</option>
-                            <option value="7-3">王陵二層</option>
-                            <option value="7-4">王陵三層</option>
-                        </select>
-                    </div>
 
-                    <div class="server-selector">
-                        <label for="server">選擇分流：</label>
-                        <select id="server">
-                            <option value="1">分流 1</option>
-                            <option value="2">分流 2</option>
-                            <option value="3">分流 3</option>
-                            <option value="4">分流 4</option>
-                            <option value="5">分流 5</option>
-                            <option value="6">分流 6</option>
-                            <option value="7">分流 7</option>
-                            <option value="8">分流 8</option>
-                            <option value="9">分流 9</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="timer-setup">
-                    <div class="input-group">
-                        <label for="hours">小時</label>
-                        <input type="number" id="hours" min="0" max="23" value="0" placeholder="0">
-                    </div>
-
-                    <div class="input-group">
-                        <label for="minutes">分鐘</label>
-                        <input type="number" id="minutes" min="0" max="59" value="0" placeholder="0">
-                    </div>
-
-                    <div class="input-group">
-                        <label for="seconds">秒數</label>
-                        <input type="number" id="seconds" min="0" max="59" value="0" placeholder="0">
-                    </div>
-                </div>
-
-                <div class="controls">
-                    <button id="addTimerBtn" class="btn btn-add">新增計時器</button>
-                    <button id="resetBtn" class="btn btn-reset">重置</button>
-                </div>
-
-                <div class="share-section">
-                    <h4>分享計時器</h4>
-                    <div class="share-controls">
-                        <button id="shareBtn" class="btn btn-share">🔗 生成分享連結</button>
-                        <button id="importBtn" class="btn btn-import">📥 匯入分享連結</button>
-                    </div>
-                    <div class="sync-status" id="syncStatus" style="display: none;">
-                        <div class="sync-indicator">
-                            <span class="sync-icon">🔄</span>
-                            <span class="sync-text">同步中...</span>
+            <div class="table-data">
+                <div class="order">
+                    <div class="head">
+                        <h3>倒數計時</h3>
+                        <div class="sort-controls">
+                            <select id="sortBy">
+                                <option value="time-asc">時間：快到慢</option>
+                                <option value="time-desc">時間：慢到快</option>
+                                <option value="ep-asc">章節：低到高</option>
+                                <option value="ep-desc">章節：高到低</option>
+                            </select>
+                            <select id="filterBy">
+                                <option value="all">全部章節</option>
+                                <option value="EP1">EP1</option>
+                                <option value="EP2">EP2</option>
+                                <option value="EP3">EP3</option>
+                                <option value="EP4">EP4</option>
+                                <option value="EP5">EP5</option>
+                                <option value="EP6">EP6</option>
+                                <option value="EP7">EP7</option>
+                                <option value="EP8">EP8</option>
+                                <option value="EP9">EP9</option>
+                                <option value="EP10">EP10</option>
+                            </select>
+                            <button id="groupToggle" class="group-btn">
+                                <i class='bx bx-group'></i> 分組顯示
+                            </button>
                         </div>
-                        <div class="sync-info">
-                            <span id="syncRole">主機</span> | 房間: <span id="roomId">-</span>
+                    </div>
+                    <div id="tableContainer">
+                        <table id="mainTable" style="display: none;">
+                            <thead>
+                                <tr>
+                                    <th>章節</th>
+                                    <th>地圖名稱</th>
+                                    <th>分流</th>
+                                    <th>倒數計時</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bossTableBody">
+                                <!-- 動態生成的王重生記錄將在這裡顯示 -->
+                            </tbody>
+                        </table>
+                        <div id="groupedContainer" style="display: none;">
+                            <!-- 分組顯示內容將在這裡顯示 -->
                         </div>
                     </div>
                 </div>
-
-                <div class="notification-controls">
-                    <div class="volume-control">
-                        <input type="range" id="volumeSlider" min="0" max="100" value="50" class="volume-slider">
-                        <span id="volumeValue">50%</span>
+                <div class="todo">
+                    <div class="head">
+                        <h3>添加王重生記錄</h3>
                     </div>
-                    <div class="mute-control">
-                        <button id="muteBtn" class="btn btn-mute">🔊</button>
+                    <div class="add-boss-form" id="addBossForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><i class='bx bxs-book-open'></i> 章節 (EP)</label>
+                                <select id="ep">
+                                    <option value="EP1">EP1</option>
+                                    <option value="EP2">EP2</option>
+                                    <option value="EP3">EP3</option>
+                                    <option value="EP4">EP4</option>
+                                    <option value="EP5">EP5</option>
+                                    <option value="EP6">EP6</option>
+                                    <option value="EP7">EP7</option>
+                                    <option value="EP8">EP8</option>
+                                    <option value="EP9">EP9</option>
+                                    <option value="EP10">EP10</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label><i class='bx bxs-map'></i> 地圖名稱</label>
+                                <select id="map">
+                                    <!-- EP1 地圖 -->
+                                    <option value="夏奧雷伊西邊森林" data-ep="EP1">夏奧雷伊西邊森林</option>
+                                    <option value="夏奧雷伊東邊森林" data-ep="EP1">夏奧雷伊東邊森林</option>
+                                    <option value="蓮帕拉沙池塘" data-ep="EP1">蓮帕拉沙池塘</option>
+                                    <option value="夏奧雷伊礦山村莊" data-ep="EP1">夏奧雷伊礦山村莊</option>
+                                    <option value="水晶礦山" data-ep="EP1">水晶礦山</option>
+                                    <!-- EP2 地圖 -->
+                                    <option value="斯拉屋塔斯峽谷" data-ep="EP2">斯拉屋塔斯峽谷</option>
+                                    <option value="凱利高原" data-ep="EP2">凱利高原</option>
+                                    <option value="奈普里塔斯懸崖" data-ep="EP2">奈普里塔斯懸崖</option>
+                                    <option value="泰內花園" data-ep="EP2">泰內花園</option>
+                                    <option value="泰內聖堂地下1層" data-ep="EP2">泰內聖堂地下1層</option>
+                                    <option value="泰內聖堂上1層" data-ep="EP2">泰內聖堂上1層</option>
+                                    <option value="泰內聖堂上2層" data-ep="EP2">泰內聖堂上2層</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><i class='bx bx-git-branch'></i> 分流</label>
+                                <select id="分流">
+                                    <option value="分流1">分流1</option>
+                                    <option value="分流2">分流2</option>
+                                    <option value="分流3">分流3</option>
+                                    <option value="分流4">分流4</option>
+                                    <option value="分流5">分流5</option>
+                                    <option value="分流6">分流6</option>
+                                    <option value="分流7">分流7</option>
+                                    <option value="分流8">分流8</option>
+                                    <option value="分流9">分流9</option>
+                                    <option value="分流10">分流10</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label><i class='bx bx-time'></i> 重生時間</label>
+                                <div class="time-inputs">
+                                    <input id="bossHours" type="number" value="0" min="0" max="99" placeholder="時">
+                                    <span>:</span>
+                                    <input id="bossMinutes" type="number" value="0" min="0" max="59" placeholder="分">
+                                    <span>:</span>
+                                    <input id="bossSeconds" type="number" value="0" min="0" max="59" placeholder="秒">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button id="confirmAddBtn" class="btn-confirm">確認添加</button>
+                            <button id="cancelAddBtn" class="btn-cancel">取消</button>
+                        </div>
                     </div>
                 </div>
+            </div>
+        </main>
+        <!-- MAIN -->
+    </section>
+    <!-- CONTENT -->
 
-                <div class="status" id="status">選擇地圖並設定重生時間</div>
-            </div>
 
-            <!-- 右側：進行中的計時器列表 -->
-            <div class="active-timers">
-                <h3>進行中的計時器</h3>
-                <div class="timers-list" id="timersList"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Lightbox 彈出視窗 -->
-    <div id="lightbox" class="lightbox">
-        <div class="lightbox-content">
-            <div class="lightbox-header">
-                <h3 id="lightboxTitle">分享計時器</h3>
-                <button id="closeLightbox" class="btn-close">&times;</button>
-            </div>
-            <div class="lightbox-body">
-                <!-- 分享連結內容 -->
-                <div id="shareContent" class="lightbox-section" style="display: none;">
-                    <label for="shareUrl">分享連結：</label>
-                    <div class="url-input-group">
-                        <input type="text" id="shareUrl" readonly>
-                        <button id="copyBtn" class="btn btn-copy">複製</button>
-                    </div>
-                    <div class="share-info">
-                        <p>將此連結分享給朋友，他們可以載入您的計時器設定</p>
-                    </div>
-                </div>
-                
-                <!-- 匯入連結內容 -->
-                <div id="importContent" class="lightbox-section" style="display: none;">
-                    <label for="importUrl">貼上分享連結：</label>
-                    <div class="url-input-group">
-                        <input type="text" id="importUrl" placeholder="貼上分享連結...">
-                        <button id="pasteBtn" class="btn btn-paste">📋 貼上</button>
-                        <button id="loadBtn" class="btn btn-load">載入</button>
-                    </div>
-                    <div class="import-info">
-                        <p>貼上朋友分享的連結來載入他們的計時器設定，或直接點擊載入從剪貼板讀取</p>
-                    </div>
-                </div>
-            </div>
-            <div class="lightbox-footer">
-                <button id="cancelBtn" class="btn btn-cancel">取消</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Firebase 配置 -->
-    <script>
-        // Firebase 配置（用於 GitHub Pages）
-        const firebaseConfig = {
-            apiKey: "AIzaSyBgSuT9wfBRUQKJf7ZhEDdhFDwURUHZzq8",
-            authDomain: "bosstimer-aa8d5.firebaseapp.com",
-            databaseURL: "https://bosstimer-aa8d5-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "bosstimer-aa8d5",
-            storageBucket: "bosstimer-aa8d5.firebasestorage.app",
-            messagingSenderId: "625660512723",
-            appId: "1:625660512723:web:ef61712fb4cd9ef37c4726",
-            measurementId: "G-QE2F8PTSBQ"
-        };
-        
-        // 初始化 Firebase
-        try {
-            firebase.initializeApp(firebaseConfig);
-            const database = firebase.database();
-            const auth = firebase.auth();
-            console.log('Firebase 初始化成功');
-        } catch (error) {
-            console.error('Firebase 初始化失敗:', error);
-            document.body.innerHTML = `
-                <div style="text-align: center; padding: 50px; color: red; font-family: Arial, sans-serif;">
-                    <h1>🔧 Firebase 初始化錯誤</h1>
-                    <p>無法連接到 Firebase 服務</p>
-                    <p>錯誤信息: ${error.message}</p>
-                </div>
-            `;
-        }
-    </script>
-    
     <script src="script.js"></script>
-    
 </body>
 
 </html>
